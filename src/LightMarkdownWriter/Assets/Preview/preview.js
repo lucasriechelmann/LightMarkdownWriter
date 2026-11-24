@@ -28,6 +28,33 @@
         });
     }
 
+    // Math from Markdig: span.math holds \(…\), div.math holds \[…\]. The TeX is kept in data-tex so exports
+    // can re-render it (MathML for the clipboard, which Word understands without KaTeX's CSS and fonts).
+    function renderMath(root, output = 'htmlAndMathml') {
+        root.querySelectorAll('.math').forEach((el) => {
+            const tex = el.dataset.tex ?? el.textContent.trim().replace(/^\\[([]/, '').replace(/\\[)\]]$/, '').trim();
+            el.dataset.tex = tex;
+            try {
+                katex.render(tex, el, { displayMode: el.tagName === 'DIV', throwOnError: false, output });
+            } catch (err) {
+                el.textContent = tex; // KaTeX itself failed (not just a TeX error, which it renders in red)
+            }
+        });
+    }
+
+    // Copy button on code blocks (not diagrams, not the front matter box). Copying goes through the app.
+    function addCopyButtons(root) {
+        root.querySelectorAll('pre').forEach((pre) => {
+            if (pre.closest('.front-matter') || pre.classList.contains('mermaid-error') || pre.querySelector('.copy-code')) return;
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'copy-code';
+            button.textContent = 'Copy';
+            button.title = 'Copy code';
+            pre.appendChild(button);
+        });
+    }
+
     async function renderDiagrams(gen) {
         const theme = mermaidTheme();
         for (const el of content.querySelectorAll('.mermaid')) {
@@ -66,6 +93,8 @@
         totalLines = Math.max(1, message.totalLines || 1);
         content.innerHTML = message.html;
         highlightCode(content);
+        renderMath(content);
+        addCopyButtons(content);
         collectAnchors();
         scrollToLine(message.line ?? syncLine, message.edge ?? syncEdge);
         renderDiagrams(gen);
@@ -269,14 +298,18 @@
             }
         }
 
-        // Front matter is metadata: shown in the preview, left out of exports.
-        clone.querySelectorAll('.front-matter').forEach((el) => el.remove());
+        // Front matter is metadata: shown in the preview, left out of exports. Copy buttons are preview-only UI.
+        clone.querySelectorAll('.front-matter, .copy-code').forEach((el) => el.remove());
+
+        // Math for the clipboard: MathML only (Word pastes it as real equations; KaTeX's HTML needs its CSS/fonts).
+        if (forClipboard) renderMath(clone, 'mathml');
 
         // Internal bookkeeping attributes don't belong in exported HTML.
-        clone.querySelectorAll('[data-line], [data-src], [data-highlighted]').forEach((el) => {
+        clone.querySelectorAll('[data-line], [data-src], [data-highlighted], [data-tex]').forEach((el) => {
             el.removeAttribute('data-line');
             el.removeAttribute('data-src');
             el.removeAttribute('data-highlighted');
+            el.removeAttribute('data-tex');
         });
         clone.removeAttribute('style'); // the live preview's accent override
 
@@ -299,6 +332,22 @@
         e.preventDefault();
         const id = decodeURIComponent(link.getAttribute('href').slice(1));
         document.getElementById(id)?.scrollIntoView({ block: 'start' });
+    });
+
+    // Copy buttons: the app puts the text on the clipboard (no clipboard API needed in the page).
+    document.addEventListener('click', (e) => {
+        const button = e.target.closest('.copy-code');
+        if (!button) return;
+        const code = button.parentElement.querySelector('code') ?? button.parentElement;
+        post({ type: 'copyText', text: code.innerText.replace(/\n$/, '') });
+        button.textContent = 'Copied';
+        setTimeout(() => (button.textContent = 'Copy'), 1500);
+    });
+
+    // Double-click jumps to the source: the nearest element that knows its line (paragraph, list item, row…).
+    document.addEventListener('dblclick', (e) => {
+        const block = e.target.closest('#content [data-line]');
+        if (block) post({ type: 'jumpToLine', line: Number(block.dataset.line) });
     });
 
     darkQuery.addEventListener('change', () => {

@@ -134,12 +134,12 @@ public sealed class Milestone9Tests : IDisposable
 
         Assert.Equal(
             [
-                new HeadingInfo(1, "Title with emphasis", 3),
-                new HeadingInfo(2, "Section code link", 7),
-                new HeadingInfo(2, "Setext", 9),
-                new HeadingInfo(3, "In a quote", 12),
+                (1, "Title with emphasis", 3),
+                (2, "Section code link", 7),
+                (2, "Setext", 9),
+                (3, "In a quote", 12),
             ],
-            headings);
+            headings.Select(h => (h.Level, h.Text, h.Line)));
     }
 
     [Fact]

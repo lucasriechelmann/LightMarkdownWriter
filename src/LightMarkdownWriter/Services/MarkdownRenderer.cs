@@ -9,8 +9,9 @@ using Markdig.Syntax.Inlines;
 
 namespace LightMarkdownWriter.Services;
 
-/// <summary>A heading in the document: level 1–6, visible text, 0-based source line.</summary>
-public sealed record HeadingInfo(int Level, string Text, int Line);
+/// <summary>A heading in the document: level 1–6, visible text, 0-based source line, and its anchor id
+/// (GitHub-style, e.g. "## Getting started" → "getting-started"), which <c>other.md#id</c> links use.</summary>
+public sealed record HeadingInfo(int Level, string Text, int Line, string? Id = null);
 
 public sealed record RenderResult(string Html, IReadOnlyList<HeadingInfo> Headings);
 
@@ -19,10 +20,13 @@ public static class MarkdownRenderer
     // Advanced extensions = GFM tables, task lists, footnotes, autolinks, strikethrough, heading ids,
     // GitHub alerts (> [!NOTE]), and Diagrams (```mermaid blocks become <div class="mermaid">).
     // YAML front matter is parsed so a leading --- block isn't rendered as a rule + heading.
+    // Emoji: :shortcodes: only, like GitHub — smileys such as :) stay as typed.
+    // Math ($…$, $$…$$) comes from UseAdvancedExtensions as span/div.math; KaTeX renders it in preview.js.
     // Pipelines are immutable and thread-safe.
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions()
         .UseYamlFrontMatter()
+        .UseEmojiAndSmiley(enableSmileys: false)
         .Build();
 
     /// <summary>Renders HTML where every block element carries data-line="N" (0-based source line),
@@ -37,7 +41,7 @@ public static class MarkdownRenderer
             block.GetAttributes().AddProperty("data-line", SourceLine(block, markdown).ToString(CultureInfo.InvariantCulture));
 
         var headings = document.Descendants<HeadingBlock>()
-            .Select(h => new HeadingInfo(h.Level, PlainText(h.Inline), SourceLine(h, markdown)))
+            .Select(h => new HeadingInfo(h.Level, PlainText(h.Inline), SourceLine(h, markdown), h.GetAttributes().Id))
             .Where(h => h.Text.Length > 0)
             .ToList();
 

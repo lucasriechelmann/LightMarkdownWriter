@@ -76,7 +76,13 @@ public partial class MainWindow : FluentWindow
         };
 
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
-        Preview.MarkdownFileLinkClicked += path => _viewModel.OpenPath(path);
+        Preview.MarkdownFileLinkClicked += OpenAtHeading;
+        Preview.SourceLineRequested += line =>
+        {
+            // Double-click in the preview: show the editor if needed, then put the caret on that source line.
+            EnsureEditorVisible();
+            Dispatcher.BeginInvoke(() => NavigateToLine(line + 1, 1, alignTop: false), DispatcherPriority.ContextIdle);
+        };
         Preview.PreviewScrolled += OnPreviewScrolled;
         Preview.KeyDown += OnPreviewKeyDown;
         Editor.TextArea.TextView.ScrollOffsetChanged += OnEditorScrollOffsetChanged;
@@ -881,6 +887,25 @@ public partial class MainWindow : FluentWindow
             Preview.SyncToLine(line - 1, line == 1 ? "top" : null);
         if (EditorCard.Visibility == Visibility.Visible)
             Dispatcher.BeginInvoke(() => Editor.Focus(), DispatcherPriority.Input);
+    }
+
+    /// <summary>
+    /// A link like <c>other.md#setup</c>: open (or switch to) the file, then put that heading at the top of both
+    /// panes. Runs after the tab switch has restored its own caret/scroll (ContextIdle comes after Loaded).
+    /// </summary>
+    private void OpenAtHeading(string path, string? headingId)
+    {
+        _viewModel.OpenPath(path);
+        if (string.IsNullOrEmpty(headingId)) return;
+
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (_viewModel.ActiveDocument is not { } doc ||
+                !string.Equals(doc.FilePath, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase)) return;
+            var heading = MarkdownRenderer.Render(doc.Document.Text).Headings
+                .FirstOrDefault(h => string.Equals(h.Id, headingId, StringComparison.OrdinalIgnoreCase));
+            if (heading is not null) NavigateToLine(heading.Line + 1, 1, alignTop: true);
+        }, DispatcherPriority.ContextIdle);
     }
 
     private void OpenGoToLine()

@@ -26,7 +26,10 @@ public partial class PreviewView : UserControl
     private string? _syncEdge;     // "top" | "bottom" | null
 
     /// <summary>Raised when a link to another local markdown file is clicked (full path).</summary>
-    public event Action<string>? MarkdownFileLinkClicked;
+    public event Action<string, string?>? MarkdownFileLinkClicked; // (full path, heading id from #fragment or null)
+
+    /// <summary>Raised when the user double-clicks a block in the preview: its 0-based source line.</summary>
+    public event Action<int>? SourceLineRequested;
 
     /// <summary>Raised when the user scrolls the preview: fractional 0-based source line at the top, and edge.</summary>
     public event Action<double, string?>? PreviewScrolled;
@@ -241,6 +244,26 @@ public partial class PreviewView : UserControl
             case "exportResult":
                 CompleteExport(root);
                 break;
+
+            case "copyText": // copy button on a code block
+                CopyToClipboard(root.GetProperty("text").GetString() ?? "");
+                break;
+
+            case "jumpToLine": // double-click in the preview
+                SourceLineRequested?.Invoke(root.GetProperty("line").GetInt32());
+                break;
+        }
+    }
+
+    private static void CopyToClipboard(string text)
+    {
+        try
+        {
+            System.Windows.Clipboard.SetText(text);
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            // Another program is holding the clipboard; the user can simply click again.
         }
     }
 
@@ -262,8 +285,9 @@ public partial class PreviewView : UserControl
             if (ResolveDocumentPath(target) is not { } localPath) return;
 
             var ext = Path.GetExtension(localPath).ToLowerInvariant();
+            var heading = target.Fragment.Length > 1 ? Uri.UnescapeDataString(target.Fragment[1..]) : null;
             if (ext is ".md" or ".markdown" or ".mdown" or ".mkd" or ".txt")
-                MarkdownFileLinkClicked?.Invoke(localPath);
+                MarkdownFileLinkClicked?.Invoke(localPath, heading);
             else
                 ShellOpen(localPath);
             return;

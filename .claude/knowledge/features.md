@@ -11,6 +11,11 @@ Each feature, in user terms, with the code that owns it. Folder-level ownership 
 | **Find and replace** | Ctrl+F / H, F3; match case, whole word and regex (Alt+C / W / R); highlights all matches; replace all as one undo step | `Views/FindReplaceBar.*`, `Editing/SearchResultRenderer.cs` |
 | **Live preview** | GFM, highlight.js, Mermaid, relative images, `.md` links open as tabs, external links open in the browser | `Services/MarkdownRenderer.cs`, `Views/PreviewView.*`, `Assets/Preview/` |
 | **GitHub alerts** | `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` and `[!CAUTION]` styled like GitHub in the preview, exports and clipboard | `MarkdownRenderer` (via `UseAdvancedExtensions`), `preview.css`/`export.css`, `preview.js` (`inlineStyles`) |
+| **Emoji** | `:tada:`-style shortcodes become emoji; smileys like `:)` stay as typed | `MarkdownRenderer` (`UseEmojiAndSmiley`) |
+| **Math** | `$inline$` and `$$block$$` rendered with KaTeX in the preview and HTML/PDF exports; MathML on the clipboard | `preview.js` (`renderMath`), `Assets/Preview/vendor/katex/`, `ExportService.KatexCss` |
+| **Code copy button** | A Copy button on each code block (on hover); never in exports | `preview.js` (`addCopyButtons`, `copyText` message), `preview.css`, `PreviewView` |
+| **Preview → source** | Double-click anything in the preview to put the editor caret on its source line | `preview.js` (`jumpToLine` message), `PreviewView.SourceLineRequested`, `MainWindow` |
+| **Heading links** | `other.md#setup` opens the file and scrolls to that heading | `PreviewView.HandleLink`, `MainWindow.OpenAtHeading`, `HeadingInfo.Id` |
 | **YAML front matter** | A leading `---` block shows as a collapsed "Front matter" box, is left out of exports, and its keys are coloured in the editor | `MarkdownRenderer.FrontMatterHtml`, `Editing/FrontMatterColorizer.cs`, `preview.css` |
 | **Status bar** | Line and column (selection size), word count (of the selection), line endings and encoding; click to convert | `MainWindow.xaml` (status bar), `MainWindow.xaml.cs` (status bar section), `Editing/TextStats.cs`, `MainViewModel` (conversion commands) |
 | **Drag and drop** | Drop `.md`/`.txt` files to open them; drop images to insert links | `MainWindow.xaml.cs` (drag-and-drop section), `MarkdownFormatting.ImageLink` |

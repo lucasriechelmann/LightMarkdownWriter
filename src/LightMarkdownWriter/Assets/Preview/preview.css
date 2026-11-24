@@ -22,6 +22,28 @@ html, body {
 /* GitHub alerts: Markdig's icons lack GitHub's .octicon class, which is what sets fill: currentColor. */
 .markdown-body .markdown-alert-title svg { fill: currentColor; margin-right: 8px; }
 
+/* Copy button on code blocks: shown on hover/focus, top-right inside the block. */
+.markdown-body pre { position: relative; }
+.markdown-body pre .copy-code {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    padding: 2px 8px;
+    font: 12px "Segoe UI Variable Text", "Segoe UI", sans-serif;
+    color: var(--fgColor-default, inherit);
+    background: var(--bgColor-default, #fff);
+    border: 1px solid var(--borderColor-default, #d1d9e0);
+    border-radius: 6px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.12s;
+}
+.markdown-body pre:hover .copy-code,
+.markdown-body pre .copy-code:focus-visible { opacity: 1; }
+
+/* Math: block formulas scroll sideways instead of overflowing the page. */
+.markdown-body .math.katex-display, .markdown-body div.math { overflow-x: auto; overflow-y: hidden; }
+
 /* YAML front matter: shown collapsed and quiet; it's metadata, not content. */
 .markdown-body details.front-matter {
     margin-bottom: 16px;

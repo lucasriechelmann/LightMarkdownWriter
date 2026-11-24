@@ -12,7 +12,9 @@ A light, fast markdown editor for Windows 11 with a live, GitHub-style preview.
   - GFM tables, task lists, footnotes and strikethrough
   - GitHub alerts (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`)
   - YAML front matter shown as a collapsed box (left out of exports)
-  - highlight.js code highlighting and Mermaid diagrams
+  - highlight.js code highlighting with a Copy button on each code block, and Mermaid diagrams
+  - math with KaTeX (`$inline$` and `$$block$$`) and emoji shortcodes (`:tada:`)
+  - links like `other.md#setup` open the file at that heading; double-click the preview to jump to the source line
   - everything bundled, so it works offline
 - **Two-way scroll sync** between editor and preview. It follows source lines, so tall images and diagrams don't make the panes drift apart.
 - **Split, editor-only or preview-only** views.
@@ -115,7 +117,7 @@ To reset the app, delete the folder while the app is closed.
 - **[AvalonEdit](https://github.com/icsharpcode/AvalonEdit)** for the editor.
 - **[Markdig](https://github.com/xoofx/markdig)** renders the markdown. Every block carries its source line, which is what drives scroll sync.
 - **WebView2** shows the preview:
-  - [github-markdown-css](https://github.com/sindresorhus/github-markdown-css), [highlight.js](https://highlightjs.org/) and [Mermaid](https://mermaid.js.org/) are embedded in the exe.
+  - [github-markdown-css](https://github.com/sindresorhus/github-markdown-css), [highlight.js](https://highlightjs.org/), [Mermaid](https://mermaid.js.org/) and [KaTeX](https://katex.org/) are embedded in the exe.
   - The preview page's Content-Security-Policy blocks scripts that come from markdown content.
 
 [PLAN.md](PLAN.md) has the design notes and the reasons behind the less obvious choices.

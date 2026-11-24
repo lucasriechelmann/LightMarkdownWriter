@@ -20,6 +20,7 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 - github-markdown-css 5.8.1 (`github-markdown.css`, and the `-light` variant used for exports)
 - highlight.js 11.11.1 (`highlight.min.js`, `hljs-github(-dark).min.css`)
 - mermaid 11.4.1
+- KaTeX 0.16.11 (`katex/katex.min.js`, `katex/katex.min.css`, and the WOFF2 fonts only in `katex/fonts/`)
 
 `.gitattributes` marks them `linguist-vendored -diff`.
 
@@ -51,7 +52,7 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 | `LineEnding`, word counts | `Editing/TextStats.cs` | Not stored; computed for the status bar |
 | Recent files (up to 15, newest first) | `Services/RecentFilesService.cs` | `%LOCALAPPDATA%\LightMarkdownWriter\recent.json`, and mirrored to the taskbar jump list by `Services/TaskbarJumpList.cs` |
 | Closed tabs (up to 20, for Ctrl+Shift+T) | `MainViewModel` (`_closedTabs`: a `SessionTab` plus discarded text) | Memory only, for the current run |
-| `HeadingInfo`, `RenderResult` | `Services/MarkdownRenderer.cs` | Not stored; computed for the outline on every render |
+| `HeadingInfo` (level, text, line, anchor `Id`), `RenderResult` | `Services/MarkdownRenderer.cs` | Not stored; computed for the outline and `#heading` links on every render |
 
 **Key invariants:**
 - **The "unsaved" flag is the undo stack's.** `DocumentViewModel.IsDirty` mirrors `!Document.UndoStack.IsOriginalFile`. A tab restored from a backup calls `DiscardOriginalFileMarker()` so it counts as unsaved.
@@ -62,12 +63,12 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 
 **Typing → preview**
 1. AvalonEdit's `TextDocument.TextChanged` starts a 150 ms debounce in `MainWindow`.
-2. `MarkdownRenderer.Render` parses the markdown once and returns the HTML plus the headings (`HeadingInfo`: level, plain text, line) for the outline. It stamps `data-line` (0-based source line) on every block; setext headings are corrected via their span (`SourceLine`).
+2. `MarkdownRenderer.Render` parses the markdown once and returns the HTML plus the headings (`HeadingInfo`: level, plain text, line, and Markdig's auto-identifier `Id`, the same id the HTML carries) for the outline and cross-file heading links. It stamps `data-line` (0-based source line) on every block; setext headings are corrected via their span (`SourceLine`).
    - `MainWindow.RenderPreview` runs when the preview *or* the outline is visible, and only sends HTML to the preview when the preview is shown. `ToHtml` is a thin wrapper used by tests and export code.
-   - The pipeline is `UseAdvancedExtensions` plus `UseYamlFrontMatter`. The advanced extensions already include GitHub alerts (`> [!NOTE]` and the others).
+   - The pipeline is `UseAdvancedExtensions`, `UseYamlFrontMatter` and `UseEmojiAndSmiley(enableSmileys: false)` (shortcodes only, like GitHub). The advanced extensions already include GitHub alerts (`> [!NOTE]` and the others) and math (`span.math` / `div.math`).
    - Markdig renders front matter as nothing, so `ToHtml` prepends a collapsed `<details class="front-matter">`. `preview.js` removes it from exports.
 3. `PreviewView.ShowHtml` posts `{type:"render", html, baseHref, totalLines, line, edge}` to `Assets/Preview/preview.js`.
-4. `preview.js` swaps the HTML and runs highlight.js. It then runs Mermaid, caching each diagram's SVG by theme and source, and re-applies the scroll position.
+4. `preview.js` swaps the HTML, runs highlight.js, renders math with KaTeX (`renderMath`, keeping the TeX in `data-tex`), and adds a Copy button to each code block. It then runs Mermaid, caching each diagram's SVG by theme and source, and re-applies the scroll position.
 
 **Scroll sync**
 - **Editor → preview:** `TextView.ScrollOffsetChanged` → `EditorTopPosition()` gives a fractional line → `{type:"scrollToLine"}`.
@@ -80,7 +81,7 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 | Direction | Types |
 |---|---|
 | App → page | `render`, `scrollToLine`, `theme` (`background`, `accent`), `export` (`id`, `forClipboard`) |
-| Page → app | `ready`, `scroll`, `exportResult` (`id`, `html` or `error`) |
+| Page → app | `ready`, `scroll`, `exportResult` (`id`, `html` or `error`), `copyText` (`text`: a code block's Copy button; the app sets the clipboard), `jumpToLine` (`line`: double-click → `SourceLineRequested`) |
 
 **Resource hosts inside WebView2:** both are served by the `WebResourceRequested` handler in `PreviewView.OnWebResourceRequested`.
 - `https://app.local/`: the preview page and libraries, read from **embedded resources** through `PreviewAssets`. The resource names are `Preview/...`, set by `<EmbeddedResource LogicalName=...>` in the csproj.
@@ -100,14 +101,15 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 - When the editor isn't visible, or for outline jumps, it also calls `Preview.SyncToLine` directly.
 
 **Navigation:** only `index.html` may load in the preview.
-- `.md` links open as tabs through `MarkdownFileLinkClicked`.
+- `.md` links open as tabs through `MarkdownFileLinkClicked(path, headingId)`. With a `#fragment`, `MainWindow.OpenAtHeading` puts the heading whose `Id` matches at the top, at `ContextIdle` priority so a newly opened tab has loaded first.
+- Double-clicking the preview posts `jumpToLine`; `MainWindow` shows the editor (Split if it was preview-only) and moves the caret there.
 - http, https and mailto links open in the default browser.
 - Browser accelerator keys are disabled.
 
 **Export** (`Services/ExportService.cs`, `MainWindow.ExportAsync`)
-1. `PreviewView.GetExportHtmlAsync` asks the page to export a copy of its DOM. Mermaid is re-rendered in the light theme with `htmlLabels:false`, and the `data-*` attributes are stripped.
+1. `PreviewView.GetExportHtmlAsync` asks the page to export a copy of its DOM. Mermaid is re-rendered in the light theme with `htmlLabels:false`, Copy buttons and front matter are removed, and the `data-*` attributes are stripped. For the clipboard, math is re-rendered as MathML only (no CSS reaches Word or mail).
 2. The result becomes one of three outputs:
-   - **HTML file:** `BuildStandaloneHtml`, which inlines the light CSS and embeds local images.
+   - **HTML file:** `BuildStandaloneHtml`, which inlines the light CSS and embeds local images. When the HTML contains `class="katex`, it also appends KaTeX's CSS with the fonts as base64 data URIs (`KatexCss`).
    - **PDF:** `ExportPdfAsync`, which uses a hidden `CoreWebView2Controller` with scripts disabled and calls `PrintToPdfAsync`. Page size is A4 in metric regions, Letter elsewhere.
    - **Clipboard:** `CopyHtmlToClipboard`. It builds CF_HTML with `BuildCfHtml` (UTF-8 byte offsets), handed to WPF as a stream, with inline styles, PNG diagrams and the markdown source as plain text.
 

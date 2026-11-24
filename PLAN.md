@@ -234,28 +234,32 @@ The gaps you notice in the first hour of use, plus the safety net for the "never
       - Clicking a heading, or pressing Enter, puts it at the top of both panes. The section containing the caret is highlighted.
     - **Bug fixed along the way:** for setext headings (text underlined with `---`/`===`), Markdig's `Line` points at the underline. `MarkdownRenderer.SourceLine` now uses the block's span, which also corrects their `data-line` scroll anchors.
 
-### Milestone 10: Markdown and preview extras
+### Milestone 10: Markdown and preview extras (done)
 
-- [ ] **10.1 Emoji shortcodes** (S, `MarkdownRenderer`)
+- [x] **10.1 Emoji shortcodes** (S, `MarkdownRenderer`)
   - Enable `UseEmojiAndSmiley`, so `:tada:` shows 🎉.
-  - Note that it also turns smileys like `:)` into emoji. Decide whether to keep that, matching GitHub, which only converts shortcodes.
   - *Done when:* shortcodes render, and a unit test covers them.
-- [ ] **10.2 Math** (M, `MarkdownRenderer`, `Assets/Preview/vendor/`, `preview.js`, export)
-  - Render `$inline$` and `$$block$$` with KaTeX.
-  - Vendor the pinned KaTeX JS, CSS and fonts. `UseMathematics` is already on through `UseAdvancedExtensions` and outputs `span.math` / `div.math`.
-  - Exports must include KaTeX's CSS and fonts, or pre-render the formulas.
-  - *Done when:* formulas render in the preview and in HTML/PDF exports. The CSP is unchanged (KaTeX needs no inline scripts).
-- [ ] **10.3 Heading links across files** (S, `PreviewView.HandleLink`, `MainWindow`)
-  - `other.md#setup` opens the file and scrolls both panes to that heading. Today it only opens the file.
-  - *Done when:* the link lands on the heading in an already-open tab and in a newly opened one.
-- [ ] **10.4 Jump from the preview to the source** (S, `preview.js`, `MainWindow`)
-  - Double-clicking an element in the preview moves the editor caret to its `data-line` and focuses the editor.
-  - *Done when:* double-clicking a paragraph, table row or list item puts the caret on that source line.
-- [ ] **10.5 Copy button on code blocks** (S, `preview.js`, `preview.css`)
-  - A hover button on each `<pre>` that copies the code, using a message to the app so the CSP stays strict.
-  - Exports must not include the button.
-  - *Done when:* it copies the exact code text and never appears in exports.
-
+  - **Decision:** `UseEmojiAndSmiley(enableSmileys: false)`. GitHub only converts `:shortcodes:`, so `:)` stays as typed. Unknown codes and times like `10:30:45` are left alone (unit-tested).
+- [x] **10.2 Math** (M, `MarkdownRenderer`, `Assets/Preview/vendor/`, `preview.js`, export)
+  - Render `$inline$` and `$$block$$` with KaTeX. `UseMathematics` was already on through `UseAdvancedExtensions` and outputs `span.math` / `div.math`.
+  - *Done when:* formulas render in the preview and in exports. The CSP is unchanged.
+  - **Vendoring:** KaTeX 0.16.11 in `vendor/katex/`: `katex.min.js`, `katex.min.css` and only the 20 WOFF2 fonts (every WebView2 reads WOFF2, so the TTF/WOFF copies would only add weight). `MediaTypes` maps `.woff2` → `font/woff2`.
+  - **How it works:**
+    - `preview.js` `renderMath` keeps the TeX source in `data-tex` (so a re-render doesn't re-parse KaTeX output) and renders with `throwOnError: false`, so a typo shows red instead of breaking the page.
+    - **HTML/PDF export:** the formulas are already rendered in the DOM. `ExportService.BuildStandaloneHtml` appends KaTeX's CSS, with the fonts inlined as base64 data URIs, *only* when the HTML contains `class="katex` (a few hundred KB of fonts; plain documents stay small).
+    - **Copy as HTML:** pasted into Word or mail there is no KaTeX CSS, so the clipboard copy re-renders math as MathML only (`output: 'mathml'`), which Word and browsers understand natively.
+  - Dollar amounts such as `$5 and $10` are not treated as math (unit-tested).
+- [x] **10.3 Heading links across files** (S, `PreviewView.HandleLink`, `MainWindow`)
+  - `other.md#setup` opens the file (or switches to its tab) and puts that heading at the top of both panes.
+  - **How it works:** `HeadingInfo` now carries Markdig's auto-identifier `Id` (the same id the HTML uses, e.g. `getting-started-1` for a repeat). `MarkdownFileLinkClicked(path, headingId)` → `MainWindow.OpenAtHeading` finds the heading case-insensitively and navigates at `ContextIdle` priority, after the new tab's editor has loaded its text.
+  - **Outcome:** checked in the app; the link opened `other.md` with the caret on `## Setup` and the preview showing it at the top.
+- [x] **10.4 Jump from the preview to the source** (S, `preview.js`, `MainWindow`)
+  - Double-clicking an element posts `{type:"jumpToLine", line}` with the nearest `data-line`; the editor gets the caret and focus. In preview-only view it switches to Split first.
+  - **Outcome:** checked in the app (double-clicking a paragraph on source line 5 gave `Ln 5, Col 1`).
+- [x] **10.5 Copy button on code blocks** (S, `preview.js`, `preview.css`)
+  - A hover button at the top right of each `<pre>` (not front matter, not Mermaid errors). It posts `{type:"copyText", text}` and the app sets the clipboard, so the page needs no clipboard permission and the CSP stays strict. The label changes to "Copied" for 1.5 s.
+  - Exports remove `.copy-code` along with `.front-matter`.
+  - **Outcome:** checked in the app; the clipboard held the exact code text.
 ### Milestone 11: Editing comfort
 
 - [ ] **11.1 Indent and outdent list items** (S, `MarkdownFormatting`)

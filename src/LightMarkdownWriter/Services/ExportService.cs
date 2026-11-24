@@ -23,6 +23,8 @@ public static partial class ExportService
             ReadAsset("vendor", "github-markdown-light.css"), "\n",
             ReadAsset("vendor", "hljs-github.min.css"), "\n",
             ReadAsset("export.css"));
+        if (contentHtml.Contains("class=\"katex", StringComparison.Ordinal))
+            css += "\n" + KatexCss.Value; // only documents with math pay for the ~350 KB of fonts
 
         return $"""
             <!DOCTYPE html>
@@ -161,6 +163,20 @@ public static partial class ExportService
     // ---------- Helpers ----------
 
     private static string ReadAsset(params string[] parts) => PreviewAssets.ReadText(string.Join('/', parts));
+
+    /// <summary>KaTeX's stylesheet with its WOFF2 fonts inlined as data URIs, so exported math renders anywhere.</summary>
+    private static readonly Lazy<string> KatexCss = new(() =>
+        KatexFont().Replace(ReadAsset("vendor", "katex", "katex.min.css"), match =>
+        {
+            using var font = PreviewAssets.Open("vendor/katex/fonts/" + match.Groups[1].Value);
+            if (font is null) return match.Value;
+            using var buffer = new MemoryStream();
+            font.CopyTo(buffer);
+            return $"url(data:font/woff2;base64,{Convert.ToBase64String(buffer.ToArray())})";
+        }));
+
+    [GeneratedRegex(@"url\(fonts/([^)]+\.woff2)\)")]
+    private static partial Regex KatexFont();
 
     [GeneratedRegex(@"(?<before><img\b[^>]*?\bsrc="")(?<src>[^""]*)(?<after>"")", RegexOptions.IgnoreCase)]
     private static partial Regex ImgSrc();
