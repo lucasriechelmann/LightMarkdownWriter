@@ -27,7 +27,7 @@ A light, fast markdown editor for Windows 11 with a live, GitHub-style preview.
 
 ## Requirements
 
-- Windows 10 1809 or later. Built and tested on Windows 11.
+- Windows 11.
 - [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
 - Microsoft Edge WebView2 Runtime, which comes with Windows 11.
 
