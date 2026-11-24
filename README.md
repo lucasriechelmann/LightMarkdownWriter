@@ -2,6 +2,8 @@
 
 A light, fast markdown editor for Windows 11 with a live, GitHub-style preview.
 
+**[Download the latest release](https://github.com/lucasriechelmann/LightMarkdownWriter/releases/latest)** · [Website](https://lucasriechelmann.github.io/LightMarkdownWriter/)
+
 ![LightMarkdownWriter: editor and live preview side by side](docs/screenshot.png)
 
 ## Features

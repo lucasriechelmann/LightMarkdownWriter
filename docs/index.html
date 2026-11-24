@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LightMarkdownWriter</title>
+<meta name="description" content="A light markdown editor for Windows 11 with a live GitHub-style preview, scroll sync, tabs that survive restarts, and HTML/PDF export.">
+<meta property="og:title" content="LightMarkdownWriter">
+<meta property="og:description" content="A light markdown editor for Windows 11 with a live preview.">
+<meta property="og:image" content="https://lucasriechelmann.github.io/LightMarkdownWriter/screenshot.png">
+<link rel="icon" href="favicon.ico">
+<style>
+:root {
+    --base: #eef2f7;          /* Mica, light */
+    --surface: #fbfcfe;       /* editor card */
+    --ink: #1b1f24;
+    --ink-soft: #545b66;
+    --line: #dde3ea;
+    --accent: #0f6cbd;        /* app icon blue */
+    --accent-ink: #ffffff;
+    --chrome: #e4e9f0;        /* window title/tab area */
+    /* Editor syntax colors (the app's Light+ palette) */
+    --syn-heading: #0451a5;
+    --syn-code: #a31515;
+    --syn-link: #267f99;
+    --syn-marker: #af00db;
+    --syn-dim: #8a8a8a;
+    --syn-quote: #008000;
+    --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+    color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --base: #1d2127;
+        --surface: #282828;
+        --ink: #e8eaed;
+        --ink-soft: #a7adb5;
+        --line: #3a3f46;
+        --accent: #479ef5;
+        --accent-ink: #0b1a2b;
+        --chrome: #22262c;
+        --syn-heading: #569cd6;
+        --syn-code: #ce9178;
+        --syn-link: #4ec9b0;
+        --syn-marker: #c586c0;
+        --syn-dim: #858585;
+        --syn-quote: #6a9955;
+    }
+}
+
+* { box-sizing: border-box; }
+
+html { background: var(--base); }
+
+body {
+    margin: 0;
+    color: var(--ink);
+    background: var(--base);
+    font: 400 1.0625rem/1.6 var(--sans);
+    -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); text-underline-offset: 0.18em; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+.prose { max-width: 44rem; }
+
+/* ---------- Top bar ---------- */
+.top {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding-top: 20px; padding-bottom: 20px;
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--ink); text-decoration: none; }
+.brand img { width: 28px; height: 28px; }
+.top nav { display: flex; gap: 20px; font-size: 0.95rem; }
+.top nav a { color: var(--ink-soft); text-decoration: none; }
+.top nav a:hover { color: var(--ink); }
+
+/* ---------- Intro ---------- */
+.intro { padding-top: 48px; padding-bottom: 36px; }
+.intro h1 {
+    margin: 0 0 16px;
+    font: 600 clamp(2.4rem, 5.2vw, 3.6rem)/1.08 var(--display);
+    letter-spacing: -0.02em;
+    max-width: 18ch;
+}
+.intro p { margin: 0 0 28px; color: var(--ink-soft); font-size: 1.2rem; max-width: 36rem; }
+
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.download {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 11px 20px; border-radius: 6px;
+    background: var(--accent); color: var(--accent-ink);
+    font-weight: 600; text-decoration: none;
+    box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+}
+.download:hover { filter: brightness(1.08); }
+.download svg { width: 18px; height: 18px; }
+.actions small { color: var(--ink-soft); font-size: 0.9rem; line-height: 1.45; }
+
+/* ---------- The app window (hero) ---------- */
+.window {
+    margin: 8px 0 12px;
+    border-radius: 8px;
+    background: var(--chrome);
+    border: 1px solid var(--line);
+    /* Windows 11 window elevation, not a generic card shadow */
+    box-shadow: 0 32px 64px rgba(15, 30, 50, 0.16), 0 2px 21px rgba(15, 30, 50, 0.12);
+    overflow: hidden;
+}
+.titlebar {
+    display: flex; align-items: center; gap: 10px;
+    height: 36px; padding: 0 14px; font-size: 0.8rem; color: var(--ink-soft);
+}
+.titlebar img { width: 16px; height: 16px; }
+.caption { margin-left: auto; display: flex; gap: 22px; color: var(--ink-soft); font-size: 0.75rem; }
+
+.toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 0 10px; }
+.tab {
+    padding: 8px 14px; border-radius: 6px 6px 0 0;
+    background: var(--base); font-size: 0.85rem;
+}
+.views { display: flex; gap: 4px; padding-bottom: 6px; }
+.views button {
+    font: 600 0.8rem/1 var(--sans);
+    padding: 7px 12px; border-radius: 5px; cursor: pointer;
+    color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+}
+.views button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+.panes {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    padding: 8px; background: var(--base);
+    transition: grid-template-columns 0.28s ease;
+}
+.window[data-view="editor"] .panes { grid-template-columns: 1fr 0fr; }
+.window[data-view="preview"] .panes { grid-template-columns: 0fr 1fr; }
+.window[data-view="editor"] .pane.preview,
+.window[data-view="preview"] .pane.source { visibility: hidden; padding: 0; border-width: 0; }
+
+.pane {
+    min-width: 0; overflow: hidden;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+}
+
+/* Source pane */
+.source pre {
+    margin: 0; padding: 14px 16px 18px 0;
+    font: 0.84rem/1.6 var(--mono); color: var(--ink);
+    white-space: pre-wrap; overflow-wrap: anywhere;
+    counter-reset: ln;
+}
+.source .l { display: block; padding-left: 3.4em; position: relative; }
+.source .l::before {
+    counter-increment: ln; content: counter(ln);
+    position: absolute; left: 0; width: 2.4em; text-align: right;
+    color: var(--syn-dim);
+}
+.h { color: var(--syn-heading); font-weight: 700; }
+.c { color: var(--syn-code); }
+.k { color: var(--syn-link); }
+.m { color: var(--syn-marker); }
+.d { color: var(--syn-dim); }
+.q { color: var(--syn-quote); font-style: italic; }
+.b { font-weight: 700; }
+.i { font-style: italic; }
+
+/* Preview pane: GitHub-style rendering */
+.preview .doc { padding: 18px 28px 22px; font-size: 0.95rem; line-height: 1.55; }
+.doc h2 {
+    margin: 0 0 12px; padding-bottom: 6px;
+    font: 600 1.6rem/1.25 var(--display); border-bottom: 1px solid var(--line);
+}
+.doc p { margin: 0 0 12px; }
+.doc code { font: 0.85em var(--mono); background: rgba(128, 128, 128, 0.14); padding: 0.15em 0.4em; border-radius: 5px; }
+.doc table { border-collapse: collapse; margin: 0 0 14px; font-size: 0.9rem; }
+.doc th, .doc td { border: 1px solid var(--line); padding: 5px 12px; text-align: left; }
+.doc th { font-weight: 600; }
+.doc tr:nth-child(2n) td { background: rgba(128, 128, 128, 0.07); }
+.doc ul { list-style: none; padding: 0; margin: 0 0 14px; }
+.doc li { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+.doc input { margin: 0; accent-color: var(--accent); }
+.doc pre {
+    margin: 0 0 14px; padding: 12px 14px; border-radius: 6px;
+    background: rgba(128, 128, 128, 0.12); font: 0.82rem/1.5 var(--mono); overflow-x: auto;
+}
+.doc pre code { background: none; padding: 0; }
+.doc blockquote { margin: 0; padding: 0 12px; border-left: 4px solid var(--line); color: var(--ink-soft); }
+.tok-k { color: var(--syn-code); }
+.tok-f { color: var(--syn-marker); }
+.tok-s { color: var(--syn-link); }
+
+.hint { margin: 14px 0 0; font-size: 0.9rem; color: var(--ink-soft); }
+
+/* ---------- Sections ---------- */
+section { padding-top: 64px; }
+h2.section {
+    margin: 0 0 20px;
+    font: 600 1.75rem/1.2 var(--display); letter-spacing: -0.01em;
+}
+
+.features { display: grid; grid-template-columns: 1fr 1fr; gap: 26px 48px; margin: 0; }
+.features dt { font-weight: 600; margin-bottom: 4px; }
+.features dd { margin: 0; color: var(--ink-soft); }
+
+kbd {
+    font: 0.82rem var(--mono); padding: 2px 6px; border-radius: 4px; white-space: nowrap;
+    background: var(--surface); border: 1px solid var(--line); border-bottom-width: 2px;
+}
+.keys { border-collapse: collapse; width: 100%; max-width: 44rem; }
+.keys td { padding: 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.keys td:last-child { text-align: right; padding-left: 16px; }
+
+.steps { margin: 0; padding-left: 1.4em; max-width: 44rem; }
+.steps li { margin: 0 0 14px; padding-left: 4px; }
+.steps li::marker { color: var(--accent); font-weight: 600; }
+
+figure { margin: 0; }
+figure img { display: block; width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); }
+figcaption { margin-top: 10px; font-size: 0.9rem; color: var(--ink-soft); }
+
+footer {
+    margin-top: 80px; padding-top: 24px; padding-bottom: 48px;
+    border-top: 1px solid var(--line); font-size: 0.9rem; color: var(--ink-soft);
+    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px;
+}
+
+/* ---------- Small screens ---------- */
+@media (max-width: 760px) {
+    .wrap { padding: 0 16px; }
+    .top nav a:not(:last-child) { display: none; } /* keep just GitHub; the sections are a short scroll away */
+    .intro { padding-top: 24px; }
+    .caption { display: none; }
+    .toolbar { flex-wrap: wrap; }
+    /* Split stacks vertically; Editor/Preview show one pane. */
+    .panes, .window[data-view] .panes { grid-template-columns: 1fr; }
+    .window[data-view="editor"] .pane.preview,
+    .window[data-view="preview"] .pane.source { display: none; }
+    .preview .doc { padding: 16px 18px; }
+    .features { grid-template-columns: 1fr; }
+    .keys td:last-child { text-align: left; }
+    .keys tr { display: grid; }
+    .keys td:first-child { border-bottom: 0; padding-bottom: 2px; }
+    .keys td:last-child { padding-left: 0; padding-top: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .panes { transition: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="wrap top">
+    <a class="brand" href="./"><img src="favicon.ico" alt="">LightMarkdownWriter</a>
+    <nav aria-label="Site">
+        <a href="#features">Features</a>
+        <a href="#install">Install</a>
+        <a href="https://github.com/lucasriechelmann/LightMarkdownWriter">GitHub</a>
+    </nav>
+</header>
+
+<main>
+    <div class="wrap intro">
+        <h1>Write markdown. See it as you type.</h1>
+        <p>A light editor for Windows 11 with a live GitHub-style preview, scroll sync, and tabs that come back exactly as you left them.</p>
+        <div class="actions">
+            <a class="download" href="https://github.com/lucasriechelmann/LightMarkdownWriter/releases/latest/download/LightMarkdownWriter.exe">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/></svg>
+                Download for Windows
+            </a>
+            <small>Version 1.0.0, one 15 MB file.<br>Needs the <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 Desktop Runtime</a>.</small>
+        </div>
+    </div>
+
+    <!-- The hero: a working replica of the app's split view. -->
+    <div class="wrap">
+        <div class="window" data-view="split" id="demo">
+            <div class="titlebar" aria-hidden="true">
+                <img src="favicon.ico" alt="">release-notes.md - LightMarkdownWriter
+                <span class="caption"><span>&#x2013;</span><span>&#x25A1;</span><span>&#x2715;</span></span>
+            </div>
+            <div class="toolbar">
+                <span class="tab">release-notes.md</span>
+                <div class="views" role="group" aria-label="View">
+                    <button type="button" data-view="editor" aria-pressed="false">Editor</button>
+                    <button type="button" data-view="split" aria-pressed="true">Split</button>
+                    <button type="button" data-view="preview" aria-pressed="false">Preview</button>
+                </div>
+            </div>
+            <div class="panes">
+                <div class="pane source" aria-label="Markdown source">
+<pre><span class="l"><span class="h"># Release notes</span></span><span class="l"> </span><span class="l">A <span class="b">**light**</span> markdown editor with a <span class="i">*live*</span> preview and <span class="c">`code`</span> highlighting.</span><span class="l"> </span><span class="l"><span class="d">|</span> Feature        <span class="d">|</span> Shortcut   <span class="d">|</span></span><span class="l"><span class="d">|----------------|------------|</span></span><span class="l"><span class="d">|</span> Bold / italic  <span class="d">|</span> Ctrl+B / I <span class="d">|</span></span><span class="l"><span class="d">|</span> Find &amp; replace <span class="d">|</span> Ctrl+F / H <span class="d">|</span></span><span class="l"> </span><span class="l"><span class="m">- [x]</span> Scroll sync</span><span class="l"><span class="m">- [x]</span> Restores unsaved tabs</span><span class="l"><span class="m">- [ ]</span> Your next idea</span><span class="l"> </span><span class="l"><span class="c">```js</span></span><span class="l"><span class="c">const greet = (name) =&gt; `Hi ${name}`;</span></span><span class="l"><span class="c">```</span></span><span class="l"> </span><span class="l"><span class="q">&gt; Read it here, or in </span><span class="k">[the README](README.md)</span><span class="q">.</span></span></pre>
+                </div>
+                <div class="pane preview" aria-label="Rendered preview">
+                    <div class="doc">
+                        <h2>Release notes</h2>
+                        <p>A <strong>light</strong> markdown editor with a <em>live</em> preview and <code>code</code> highlighting.</p>
+                        <table>
+                            <thead><tr><th>Feature</th><th>Shortcut</th></tr></thead>
+                            <tbody>
+                                <tr><td>Bold / italic</td><td>Ctrl+B / I</td></tr>
+                                <tr><td>Find &amp; replace</td><td>Ctrl+F / H</td></tr>
+                            </tbody>
+                        </table>
+                        <ul>
+                            <li><input type="checkbox" checked disabled aria-label="done"> Scroll sync</li>
+                            <li><input type="checkbox" checked disabled aria-label="done"> Restores unsaved tabs</li>
+                            <li><input type="checkbox" disabled aria-label="not done"> Your next idea</li>
+                        </ul>
+                        <pre><code><span class="tok-k">const</span> <span class="tok-f">greet</span> = (name) =&gt; <span class="tok-s">`Hi ${name}`</span>;</code></pre>
+                        <blockquote>Read it here, or in <a href="https://github.com/lucasriechelmann/LightMarkdownWriter#readme">the README</a>.</blockquote>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <p class="hint">These are the app's own view buttons. In the app, Ctrl+1, Ctrl+2 and Ctrl+3 do the same.</p>
+    </div>
+
+    <section id="features" class="wrap">
+        <h2 class="section">What it does</h2>
+        <dl class="features">
+            <div><dt>Preview that looks like GitHub</dt><dd>Tables, task lists, footnotes, highlighted code and Mermaid diagrams, in light or dark. Everything works offline.</dd></div>
+            <div><dt>Both panes stay in step</dt><dd>Scroll either side and the other follows by source line, so tall images and diagrams never throw it off.</dd></div>
+            <div><dt>Nothing to save on exit</dt><dd>Close the window any time. Every tab, its unsaved text, cursor and scroll position are back next time.</dd></div>
+            <div><dt>Notices outside edits</dt><dd>If another program changes an open file, a clean tab reloads in place. With unsaved edits, you choose which version to keep.</dd></div>
+            <div><dt>Helps you write</dt><dd>Syntax colors, shortcuts for bold, italic, links and code blocks, lists that continue on Enter, and find &amp; replace with regex.</dd></div>
+            <div><dt>Export or paste anywhere</dt><dd>Save a standalone HTML file or a PDF, or copy as HTML that pastes cleanly into Outlook, Word or Teams.</dd></div>
+            <div><dt>Feels like Windows 11</dt><dd>Mica, Fluent controls, and your Windows light/dark theme and accent color.</dd></div>
+            <div><dt>One small file</dt><dd>A single portable exe. Open a .md file while it's running and it joins the same window as a new tab.</dd></div>
+        </dl>
+    </section>
+
+    <section class="wrap">
+        <figure>
+            <img src="screenshot.png" width="1500" height="950" alt="LightMarkdownWriter in dark mode: markdown source with syntax colors on the left, rendered preview with a table, task list, code and a diagram on the right.">
+            <figcaption>The real app in dark mode.</figcaption>
+        </figure>
+    </section>
+
+    <section id="shortcuts" class="wrap">
+        <h2 class="section">Keyboard shortcuts</h2>
+        <table class="keys">
+            <tbody>
+                <tr><td>New, open, save, save as</td><td><kbd>Ctrl+N</kbd> <kbd>Ctrl+O</kbd> <kbd>Ctrl+S</kbd> <kbd>Ctrl+Shift+S</kbd></td></tr>
+                <tr><td>Editor, split, preview</td><td><kbd>Ctrl+1</kbd> <kbd>Ctrl+2</kbd> <kbd>Ctrl+3</kbd></td></tr>
+                <tr><td>Bold, italic, inline code</td><td><kbd>Ctrl+B</kbd> <kbd>Ctrl+I</kbd> <kbd>Ctrl+E</kbd></td></tr>
+                <tr><td>Link, code block</td><td><kbd>Ctrl+K</kbd> <kbd>Ctrl+Shift+K</kbd></td></tr>
+                <tr><td>Find, replace, next match</td><td><kbd>Ctrl+F</kbd> <kbd>Ctrl+H</kbd> <kbd>F3</kbd></td></tr>
+                <tr><td>Next tab, close tab</td><td><kbd>Ctrl+Tab</kbd> <kbd>Ctrl+W</kbd></td></tr>
+                <tr><td>Export HTML, export PDF, copy as HTML</td><td><kbd>Ctrl+Shift+E</kbd> <kbd>Ctrl+P</kbd> <kbd>Ctrl+Shift+C</kbd></td></tr>
+                <tr><td>Settings</td><td><kbd>Ctrl+,</kbd></td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section id="install" class="wrap">
+        <h2 class="section">Install</h2>
+        <ol class="steps">
+            <li>Install the <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 Desktop Runtime</a> if you don't have it. The app tells you if it's missing.</li>
+            <li><a href="https://github.com/lucasriechelmann/LightMarkdownWriter/releases/latest/download/LightMarkdownWriter.exe">Download LightMarkdownWriter.exe</a> and put it in a folder you'll keep, such as <code>C:\Tools</code>.</li>
+            <li>Run it. Windows may warn that the app isn't recognized, because it isn't code-signed: choose <em>More info</em>, then <em>Run anyway</em>.</li>
+            <li>To open .md files with it, go to <em>Settings</em> (<kbd>Ctrl+,</kbd>), then <em>Register</em>. To make it the default, use <em>Open Default apps</em> on the same page.</li>
+        </ol>
+        <p class="prose">Want to check the download? Each <a href="https://github.com/lucasriechelmann/LightMarkdownWriter/releases/latest">release</a> lists its SHA-256 checksum.</p>
+    </section>
+</main>
+
+<footer class="wrap">
+    <span>LightMarkdownWriter is free and open source under the <a href="https://github.com/lucasriechelmann/LightMarkdownWriter/blob/main/LICENSE">MIT license</a>.</span>
+    <span>Built with WPF, AvalonEdit, Markdig, WebView2 and WPF-UI.</span>
+</footer>
+
+<script>
+    // The hero's view buttons switch between editor, split and preview, like the app.
+    const demo = document.getElementById('demo');
+    demo.querySelectorAll('.views button').forEach((button) => {
+        button.addEventListener('click', () => {
+            demo.dataset.view = button.dataset.view;
+            demo.querySelectorAll('.views button').forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
+        });
+    });
+</script>
+</body>
+</html>
