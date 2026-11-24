@@ -10,6 +10,8 @@ A light, fast markdown editor for Windows 11 with a live, GitHub-style preview.
 
 - **Live preview** in GitHub style (light/dark):
   - GFM tables, task lists, footnotes and strikethrough
+  - GitHub alerts (`> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`)
+  - YAML front matter shown as a collapsed box (left out of exports)
   - highlight.js code highlighting and Mermaid diagrams
   - everything bundled, so it works offline
 - **Two-way scroll sync** between editor and preview. It follows source lines, so tall images and diagrams don't make the panes drift apart.
@@ -21,6 +23,9 @@ A light, fast markdown editor for Windows 11 with a live, GitHub-style preview.
   - bold/italic/code/link/code-block shortcuts
   - lists continue on Enter
   - find & replace with regex
+  - drag files in to open them, or drag images in to insert links
+- **Status bar** with line and column, word count, line endings and encoding. Click the last two to convert, for example CRLF ↔ LF or adding/removing the UTF-8 BOM.
+- **Crash-safe.** An unexpected error saves all tabs and unsaved text, then lets you keep working.
 - **Export** as a standalone HTML file or a PDF, or **copy as HTML** that pastes cleanly into Outlook, Word or Teams. Exports are always light-themed.
 - **Windows 11 look:** Mica, Fluent controls, and your Windows light/dark theme and accent colour.
 - **One small exe.** A single portable file, one window, and a second launch opens its files in the running window.
@@ -81,6 +86,7 @@ Everything lives in `%LOCALAPPDATA%\LightMarkdownWriter\`:
 | `session.json` | Open tabs, caret/scroll positions, window placement, view mode |
 | `backups\` | Unsaved text of open tabs; removed once a tab is saved or closed |
 | `WebView2\` | The preview's browser cache |
+| `crash.log` | Details of unexpected errors, if any happened (no document text) |
 
 To reset the app, delete the folder while the app is closed.
 

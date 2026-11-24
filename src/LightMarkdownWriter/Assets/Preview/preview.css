@@ -19,6 +19,18 @@ html, body {
     font-family: "Segoe UI Variable Text", "Segoe UI", -apple-system, sans-serif;
 }
 
+/* GitHub alerts: Markdig's icons lack GitHub's .octicon class, which is what sets fill: currentColor. */
+.markdown-body .markdown-alert-title svg { fill: currentColor; margin-right: 8px; }
+
+/* YAML front matter: shown collapsed and quiet; it's metadata, not content. */
+.markdown-body details.front-matter {
+    margin-bottom: 16px;
+    font-size: 85%;
+    color: var(--fgColor-muted, #59636e);
+}
+.markdown-body details.front-matter summary { cursor: pointer; }
+.markdown-body details.front-matter pre { margin: 8px 0 0; }
+
 /* Markdig puts an <hr> in the footnotes block and GitHub's CSS already draws a border there. */
 .markdown-body .footnotes > hr { display: none; }
 

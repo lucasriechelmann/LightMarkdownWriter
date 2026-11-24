@@ -34,6 +34,16 @@ public static class MarkdownHighlighting
     public static IHighlightingDefinition Get(bool dark) =>
         dark ? _dark ??= Load(DarkPalette) : _light ??= Load(LightPalette);
 
+    /// <summary>A palette color as a frozen brush, for colorizers outside the .xshd (e.g. front matter).</summary>
+    public static System.Windows.Media.Brush Brush(string name, bool dark)
+    {
+        var hex = (dark ? DarkPalette : LightPalette)[name];
+        var brush = new System.Windows.Media.SolidColorBrush(
+            (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex));
+        brush.Freeze();
+        return brush;
+    }
+
     private static IHighlightingDefinition Load(Dictionary<string, string> palette)
     {
         // Loaded definitions are frozen, so colors are substituted into the XML before loading.

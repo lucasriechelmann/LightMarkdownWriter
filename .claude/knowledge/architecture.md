@@ -27,6 +27,10 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 
 `App.OnStartup` in `src/LightMarkdownWriter/App.xaml.cs` wires everything by hand, in this order:
 
+0. **Crash safety net.** `InstallCrashHandlers()` runs first.
+   - UI-thread errors: log to `CrashLog`, call `MainWindow.PersistSessionNow()`, show a dialog, and keep running. After more than 5 errors in 10 s, the app closes instead.
+   - Background-thread errors: log and persist (they always end the process).
+   - Unobserved task exceptions: logged only.
 1. **Single instance.** `SingleInstance.TryBecomePrimary()` (a named mutex). If another instance is running, the files are sent to it with `SendToPrimary` and this process exits.
 2. **Settings and theme.** `SettingsService.Load()` gives `AppSettings`. The theme is applied before the first frame, using the `--theme=` argument if given, otherwise the setting.
 3. **Session.** `SessionService.Load()` gives a `Session`.
@@ -43,6 +47,8 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 | `AppSettings`, `AppTheme` | `Services/SettingsService.cs` | `%LOCALAPPDATA%\LightMarkdownWriter\settings.json`, with enums written as strings |
 | `ViewMode` (Editor / Split / Preview) | `ViewModels/MainViewModel.cs` | In the session |
 | `AssociationState`, ProgId `LightMarkdownWriter.md` | `Services/FileAssociationService.cs` | `HKCU\Software\Classes`, `HKCU\Software\LightMarkdownWriter\Capabilities`, `RegisteredApplications` |
+| Crash entries (exceptions only, no document text) | `Services/CrashLog.cs` | `%LOCALAPPDATA%\LightMarkdownWriter\crash.log`, rolled over to `crash.old.log` at 1 MB |
+| `LineEnding`, word counts | `Editing/TextStats.cs` | Not stored; computed for the status bar |
 
 **Key invariants:**
 - **The "unsaved" flag is the undo stack's.** `DocumentViewModel.IsDirty` mirrors `!Document.UndoStack.IsOriginalFile`. A tab restored from a backup calls `DiscardOriginalFileMarker()` so it counts as unsaved.
@@ -53,7 +59,9 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 
 **Typing → preview**
 1. AvalonEdit's `TextDocument.TextChanged` starts a 150 ms debounce in `MainWindow`.
-2. `MarkdownRenderer.ToHtml` parses with Markdig's `UseAdvancedExtensions` and stamps `data-line` (0-based source line) on every block.
+2. `MarkdownRenderer.ToHtml` parses the markdown and stamps `data-line` (0-based source line) on every block.
+   - The pipeline is `UseAdvancedExtensions` plus `UseYamlFrontMatter`. The advanced extensions already include GitHub alerts (`> [!NOTE]` and the others).
+   - Markdig renders front matter as nothing, so `ToHtml` prepends a collapsed `<details class="front-matter">`. `preview.js` removes it from exports.
 3. `PreviewView.ShowHtml` posts `{type:"render", html, baseHref, totalLines, line, edge}` to `Assets/Preview/preview.js`.
 4. `preview.js` swaps the HTML and runs highlight.js. It then runs Mermaid, caching each diagram's SVG by theme and source, and re-applies the scroll position.
 
@@ -73,6 +81,15 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 **Resource hosts inside WebView2:** both are served by the `WebResourceRequested` handler in `PreviewView.OnWebResourceRequested`.
 - `https://app.local/`: the preview page and libraries, read from **embedded resources** through `PreviewAssets`. The resource names are `Preview/...`, set by `<EmbeddedResource LogicalName=...>` in the csproj.
 - `https://doc.local/`: files from the *active document's* folder. Each request checks that the path stays inside that folder. Folder mappings aren't used, because they only apply on the next page load.
+
+**Drag and drop:** handled by `MainWindow` on the window's tunnelling `PreviewDragOver`/`PreviewDrop` events.
+- `.md`, `.markdown` and `.txt` files open as tabs.
+- Images get `![](…)` links, built by `MarkdownFormatting.ImageLink`, in the active tab.
+- `WebView2.AllowExternalDrop = false`, so drops onto the preview fall through to the window.
+
+**Status bar:** `MainWindow` code-behind updates the caret position instantly, and the word count and line-ending label after a 300 ms debounce (`TextStats`).
+- The encoding label is bound to `DocumentViewModel.EncodingLabel`.
+- Conversions are `MainViewModel.ConvertLineEndingsCommand` and `SetEncodingCommand`, run from the status-bar context menus.
 
 **Navigation:** only `index.html` may load in the preview.
 - `.md` links open as tabs through `MarkdownFileLinkClicked`.

@@ -159,33 +159,53 @@ The rules in CLAUDE.md still apply to every task:
 - Windows 10 keeps working.
 - Update `.claude/knowledge/` when a task changes architecture or data formats.
 
-### Milestone 8: Everyday essentials (next)
+### Milestone 8: Everyday essentials (done, apart from 8.2's manual check)
 
 The gaps you notice in the first hour of use, plus the safety net for the "never lose text" promise.
 
-- [ ] **8.1 Crash safety net** (S, `App.xaml.cs`)
+- [x] **8.1 Crash safety net** (S, `App.xaml.cs`)
   - Handle `DispatcherUnhandledException`, `AppDomain.UnhandledException` and `TaskScheduler.UnobservedTaskException`.
   - Persist the session immediately, show the error in a dialog, and keep running when it's recoverable.
   - *Done when:* an exception thrown on purpose doesn't close the app, and the unsaved text is in `backups/`.
+  - **Outcome:** checked in the app with the debug-only shortcut **Ctrl+Alt+Shift+F12**, which throws a test error. The app kept running, the dialog appeared, and the backup was written by the handler.
+  - **Decisions:**
+    - **Crash log.** Errors are appended to `%LOCALAPPDATA%\LightMarkdownWriter\crash.log`. It holds exceptions only (no logging framework and no document content) and rolls over to `crash.old.log` at 1 MB.
+    - **Error loop guard.** More than 5 errors within 10 s means the app is in an error loop, so it saves and lets the app close rather than showing endless dialogs.
+    - **Background-thread errors** always end the process, so the handler only saves the session (waiting up to 3 s for the UI thread).
 - [ ] **8.2 Drag and drop files** (S, `MainWindow`)
   - Dropping `.md`/`.markdown`/`.txt` files on the window opens them as tabs.
   - Dropping an image on the editor inserts `![](relative/path)`, relative to the document's folder, or an absolute path for untitled tabs.
   - Watch out: the preview is a native window, so drops onto it need their own handling, or must be blocked there.
   - *Done when:* dropping files onto the editor, the tab strip and the preview area behaves as described.
-- [ ] **8.3 Status bar** (M, `MainWindow.xaml`, `DocumentViewModel`)
+  - **Status: built; waiting for a manual drop test.** The link building is unit-tested: relative paths with `%20`/`%28`/`%29` escaping, `../`, and a `file:///` URI for untitled documents. I couldn't safely automate a real OLE drag, because it takes over the mouse.
+  - **How it works:**
+    - The window's *tunnelling* `PreviewDragOver`/`PreviewDrop` events handle file drops, so AvalonEdit's text drag-and-drop is unaffected.
+    - `WebView2.AllowExternalDrop = false`, so a drop onto the preview falls through to the window instead of the browser navigating to the file.
+    - Images are inserted at the drop point (or the caret) in the active tab.
+- [x] **8.3 Status bar** (M, `MainWindow.xaml`, `DocumentViewModel`)
   - Shows line and column, word count (and selection count), encoding (UTF-8 / UTF-8 BOM / other) and line endings (CRLF / LF).
   - Clicking the encoding or line-ending field converts the document. Converting marks the tab unsaved; the change is written on the next save.
   - Placement: below the editor/preview grid, never over the preview.
   - *Done when:* the values update as you type, and converting then saving changes the bytes on disk as expected (unit-test the conversion).
-- [ ] **8.4 YAML front matter** (S, `MarkdownRenderer`, `preview.css`)
+  - **Outcome:** checked in the app. Converting to LF and saving left 0 CR bytes; switching to UTF-8 with BOM wrote `EF BB BF`.
+  - **How it works:**
+    - Conversions are `MainViewModel` commands. Line endings change in one undo step. Changing the encoding marks the tab unsaved, but undo doesn't revert it.
+    - The word count skips markdown symbols and task checkboxes.
+    - The logic lives in `Editing/TextStats.cs` and is unit-tested.
+- [x] **8.4 YAML front matter** (S, `MarkdownRenderer`, `preview.css`)
   - Enable Markdig's `UseYamlFrontMatter`, so a `---` block at the top no longer renders as a rule and text.
   - Show it as a small collapsed "Front matter" box in the preview, or hide it. Decide while building, and record the choice here.
   - Add highlighting for the block in `Markdown.xshd`.
   - *Done when:* a Jekyll/Hugo-style file previews cleanly, and a unit test covers the rendering.
-- [ ] **8.5 GitHub alerts** (S, `MarkdownRenderer`, `preview.css`, `export.css`)
+  - **The old bug:** front matter used to render as a horizontal rule followed by a heading made of the YAML lines.
+  - **Decision:** the preview shows it as a collapsed `<details class="front-matter">` with YAML highlighting. Exports leave it out, since it's metadata.
+  - **Changed from the plan:** editor colouring is done by `Editing/FrontMatterColorizer.cs`, not `.xshd`. xshd rules can't anchor to the start of the document, so a `---` span would also swallow the text between any two horizontal rules.
+- [x] **8.5 GitHub alerts** (S, `MarkdownRenderer`, `preview.css`, `export.css`)
   - Render `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` and `[!CAUTION]` like GitHub does (`UseAlertBlocks`, if it isn't already part of `UseAdvancedExtensions`).
   - Style them in the preview, both themes, and in exports. Copy-as-HTML needs inline styles.
   - *Done when:* all five render in the preview, in HTML/PDF exports and in clipboard HTML.
+  - **Outcome:** `UseAdvancedExtensions` already includes alerts, with GitHub's own HTML and icons. Checked in the preview (dark), in an HTML export, and on the clipboard (inline borders and title colours in GitHub's palette).
+  - **Fix needed:** Markdig's icon SVGs lack GitHub's `.octicon` class, so they rendered black. A `fill: currentColor` rule was added in `preview.css` and `export.css`.
 
 ### Milestone 9: Finding your way around
 

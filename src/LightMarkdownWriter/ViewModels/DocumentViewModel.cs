@@ -21,7 +21,36 @@ public partial class DocumentViewModel : ObservableObject
 
     public TextDocument Document { get; }
 
-    public Encoding Encoding { get; private set; }
+    private Encoding _encoding = Utf8NoBom;
+
+    /// <summary>The encoding the file is saved with (detected on load, kept on save, changed from the status bar).</summary>
+    public Encoding Encoding
+    {
+        get => _encoding;
+        private set
+        {
+            if (SetProperty(ref _encoding, value)) OnPropertyChanged(nameof(EncodingLabel));
+        }
+    }
+
+    public string EncodingLabel => Encoding switch
+    {
+        UTF8Encoding utf8 => utf8.GetPreamble().Length > 0 ? "UTF-8 with BOM" : "UTF-8",
+        UnicodeEncoding unicode => unicode.GetPreamble() is [0xFE, 0xFF, ..] ? "UTF-16 BE" : "UTF-16 LE",
+        _ => Encoding.WebName.ToUpperInvariant(),
+    };
+
+    /// <summary>
+    /// Saves with a different encoding from now on. The text is unchanged but the bytes on disk will differ, so
+    /// the tab counts as unsaved until it's saved.
+    /// </summary>
+    public void ChangeEncoding(Encoding encoding)
+    {
+        if (EncodingToName(encoding) == EncodingToName(Encoding)) return;
+        Encoding = encoding;
+        Document.UndoStack.DiscardOriginalFileMarker();
+        BackupStale = true;
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DisplayName))]

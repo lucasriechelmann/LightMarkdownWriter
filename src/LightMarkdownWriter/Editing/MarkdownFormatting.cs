@@ -132,6 +132,31 @@ public static partial class MarkdownFormatting
         }
     }
 
+    public static readonly string[] ImageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".avif"];
+
+    public static bool IsImage(string path) =>
+        ImageExtensions.Contains(System.IO.Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <c>![name](path)</c> for an image file: relative to the document's folder (forward slashes, spaces and
+    /// parentheses escaped so the link survives), or a file:/// URI when the document is untitled.
+    /// </summary>
+    public static string ImageLink(string imagePath, string? documentFolder)
+    {
+        var alt = System.IO.Path.GetFileNameWithoutExtension(imagePath).Replace('[', '(').Replace(']', ')');
+        string target;
+        if (documentFolder is null)
+        {
+            target = new Uri(imagePath).AbsoluteUri;
+        }
+        else
+        {
+            target = System.IO.Path.GetRelativePath(documentFolder, imagePath).Replace('\\', '/');
+            target = target.Replace("%", "%25").Replace(" ", "%20").Replace("(", "%28").Replace(")", "%29");
+        }
+        return $"![{alt}]({target})";
+    }
+
     [GeneratedRegex(@"^(?<indent>[ \t]*)(?:(?<bullet>[-*+])|(?<num>\d{1,9})(?<delim>[.)]))(?<space>[ \t]+)(?<task>\[[ xX]\][ \t]+)?")]
     private static partial Regex ListItemPrefix();
 

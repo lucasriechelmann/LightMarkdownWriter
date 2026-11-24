@@ -188,6 +188,19 @@
         set('blockquote', `border-left: 4px solid ${border}; padding: 0 1em; color: #59636e; margin: 0 0 16px 0;`);
         set('a', 'color: #0969da;');
         set('img', 'max-width: 100%;');
+
+        // GitHub alerts (> [!NOTE] etc.), with github.com's light colors.
+        const alertColors = { note: '#0969da', tip: '#1a7f37', important: '#8250df', warning: '#9a6700', caution: '#d1242f' };
+        root.querySelectorAll('.markdown-alert').forEach((el) => {
+            const kind = [...el.classList].find((c) => c.startsWith('markdown-alert-'))?.slice(15);
+            const color = alertColors[kind] ?? '#59636e';
+            el.style.cssText += `border-left: 4px solid ${color}; padding: 8px 16px; margin: 0 0 16px 0;`;
+            const title = el.querySelector('.markdown-alert-title');
+            if (title) {
+                title.style.cssText += `color: ${color}; font-weight: 600; margin: 0 0 4px 0;`;
+                title.querySelector('svg')?.setAttribute('fill', color); // where SVG is shown at all
+            }
+        });
         root.querySelectorAll('pre [class*="hljs-"]').forEach((el) => {
             const color = [...el.classList].map((c) => hljsLight[c]).find(Boolean);
             if (color) el.style.color = color;
@@ -255,6 +268,9 @@
                 initMermaid(); // back to the live preview's theme and settings
             }
         }
+
+        // Front matter is metadata: shown in the preview, left out of exports.
+        clone.querySelectorAll('.front-matter').forEach((el) => el.remove());
 
         // Internal bookkeeping attributes don't belong in exported HTML.
         clone.querySelectorAll('[data-line], [data-src], [data-highlighted]').forEach((el) => {

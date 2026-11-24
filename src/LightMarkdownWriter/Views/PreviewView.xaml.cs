@@ -34,6 +34,9 @@ public partial class PreviewView : UserControl
     public PreviewView()
     {
         InitializeComponent();
+        // Don't let the browser take dropped files (it would try to navigate to them). With external drops off,
+        // the drop falls through to the main window, which opens the files as tabs.
+        WebView.AllowExternalDrop = false;
     }
 
     public Task InitializeAsync() => _initTask ??= InitializeCoreAsync();

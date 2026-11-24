@@ -35,6 +35,10 @@ Each pattern below names a real file to copy from.
 - **Background failures** (session or settings save, backup cleanup) are swallowed with a comment saying why. The next attempt retries.
   - If the session save fails when closing, the app falls back to asking whether to save (`MainWindow.OnClosing`). Never lose text silently.
 - **No logging framework.** There's no logger or tracing. Don't add one without a decision in PLAN.md.
+  - The one exception is `CrashLog.Write` (`Services/CrashLog.cs`), used only by the crash handlers in `App.xaml.cs`, for exceptions.
+- **Unhandled exceptions** are caught globally (see `App.InstallCrashHandlers`). That's a safety net, not a substitute for the specific catches above.
+  - `MainWindow.PersistSessionNow()` is the only place that catches *every* exception, because a failure while saving during a crash must not cause a second crash.
+- **Testing the safety net:** debug builds throw a test error on **Ctrl+Alt+Shift+F12** (guarded by `#if DEBUG` in `MainWindow.SetUpExport`).
 
 ## Files and persistence
 
@@ -84,6 +88,15 @@ Each pattern below names a real file to copy from.
 **Text and clipboard**
 - `Encoding.WebName` hides whether there's a BOM, and `GetEncoding("utf-8")` writes one.
 - CF_HTML offsets are in UTF-8 bytes. .NET Framework readers decode the data as ANSI, so don't trust them when checking offsets.
+
+**Editor colouring the `.xshd` can't express**
+- Anything tied to the document's *start*, such as YAML front matter, goes in a `DocumentColorizingTransformer` added to `TextView.LineTransformers` (reference: `Editing/FrontMatterColorizer.cs`). Cache results per `document.Version`.
+- Theme brushes come from `MarkdownHighlighting.Brush(name, dark)`.
+
+**WPF context menus and markdown extras**
+- A `ContextMenu` lives outside the visual tree. When opening one from a `Click` handler, set `PlacementTarget` and `DataContext` explicitly (`MainWindow.OnStatusMenuClick`), or command bindings won't resolve.
+- **Alert icons:** Markdig's alert SVGs lack GitHub's `.octicon` class. Without the `fill: currentColor` rule in `preview.css`/`export.css` they render black.
+- **Browsers rewrite inline colours.** When checking clipboard or export HTML produced by `preview.js`, inline colours come out as `rgb(…)`, not the `#hex` written in the code.
 
 **Editor font**
 - Cascadia **Code** ligatures disguise markdown syntax (`=>`, `-->`, `|---`), so the default is Cascadia **Mono**.

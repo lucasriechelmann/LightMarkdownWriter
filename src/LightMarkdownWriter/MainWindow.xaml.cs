@@ -85,6 +85,122 @@ public partial class MainWindow : FluentWindow
 
         SetUpEditing();
         SetUpExport();
+
+        // Status bar: caret position instantly; words and line endings (whole-document scans) after a pause.
+        _statsTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(300) };
+        _statsTimer.Tick += (_, _) =>
+        {
+            _statsTimer.Stop();
+            UpdateDocumentStats();
+        };
+        Editor.TextArea.Caret.PositionChanged += (_, _) => UpdateCaretStatus();
+        Editor.TextArea.SelectionChanged += (_, _) =>
+        {
+            UpdateCaretStatus();
+            ScheduleStats();
+        };
+        Editor.DocumentChanged += (_, _) =>
+        {
+            UpdateCaretStatus();
+            ScheduleStats();
+        };
+        ScheduleStats(); // the first document was bound during InitializeComponent, before these handlers
+
+        // Drag and drop files from Explorer. Tunneling events, so the editor's own text drag-and-drop never sees
+        // file drops (it would reject them) but still works for text.
+        AllowDrop = true;
+        PreviewDragOver += OnFileDragOver;
+        PreviewDrop += OnFileDrop;
+    }
+
+    // ---------- Status bar ----------
+
+    private readonly DispatcherTimer _statsTimer;
+
+    private void ScheduleStats()
+    {
+        _statsTimer.Stop();
+        _statsTimer.Start();
+    }
+
+    private void UpdateCaretStatus()
+    {
+        var caret = Editor.TextArea.Caret;
+        var selected = Editor.SelectionLength;
+        CaretStatus.Text = selected > 0
+            ? $"Ln {caret.Line}, Col {caret.Column} ({selected:N0} selected)"
+            : $"Ln {caret.Line}, Col {caret.Column}";
+    }
+
+    private void UpdateDocumentStats()
+    {
+        if (Editor.Document is not { } document) return;
+        var total = TextStats.CountWords(document.Text);
+        WordStatus.Text = Editor.SelectionLength > 0
+            ? $"{TextStats.CountWords(Editor.SelectedText):N0} of {total:N0} words"
+            : total == 1 ? "1 word" : $"{total:N0} words";
+        LineEndingButton.Content = TextStats.Label(TextStats.DetectLineEnding(document));
+    }
+
+    private void OnStatusMenuClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { ContextMenu: { } menu } button) return;
+        menu.PlacementTarget = button;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
+        menu.DataContext = DataContext; // menus live outside the visual tree
+        menu.IsOpen = true;
+    }
+
+    // ---------- Drag and drop ----------
+
+    private static readonly string[] OpenableExtensions = [".md", ".markdown", ".mdown", ".mkd", ".txt"];
+
+    private static bool IsOpenable(string path) =>
+        OpenableExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
+    private static string[]? DroppedFiles(DragEventArgs e) =>
+        e.Data.GetDataPresent(DataFormats.FileDrop) && e.Data.GetData(DataFormats.FileDrop) is string[] paths
+            ? paths.Where(File.Exists).ToArray()
+            : null;
+
+    private void OnFileDragOver(object sender, DragEventArgs e)
+    {
+        if (DroppedFiles(e) is not { } files) return; // not a file drag: leave it to the editor
+        e.Effects = files.Any(f => IsOpenable(f) || MarkdownFormatting.IsImage(f)) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    /// <summary>Markdown/text files open as tabs; images become links in the active document.</summary>
+    private void OnFileDrop(object sender, DragEventArgs e)
+    {
+        if (DroppedFiles(e) is not { } files) return;
+        e.Handled = true;
+
+        var images = files.Where(MarkdownFormatting.IsImage).ToList();
+        var target = _watchedDocument; // where images go: the tab that was active when they were dropped
+        if (images.Count > 0 && target is not null && Editor.Document == target.Document)
+            InsertImageLinks(images, target, e);
+
+        foreach (var path in files.Where(IsOpenable))
+            _viewModel.OpenPath(path);
+
+        Activate(); // drops from Explorer don't bring the window forward
+    }
+
+    private void InsertImageLinks(IReadOnlyList<string> images, DocumentViewModel doc, DragEventArgs e)
+    {
+        var folder = doc.FilePath is null ? null : Path.GetDirectoryName(doc.FilePath);
+        var links = string.Join(Environment.NewLine, images.Select(path => MarkdownFormatting.ImageLink(path, folder)));
+
+        // At the drop point when dropped on the editor text, otherwise at the caret.
+        var offset = Editor.CaretOffset;
+        if (EditorCard.Visibility == Visibility.Visible && Editor.GetPositionFromPoint(e.GetPosition(Editor)) is { } position)
+            offset = Editor.Document.GetOffset(position.Location);
+
+        Editor.Document.Insert(offset, links);
+        Editor.CaretOffset = offset + links.Length;
+        EnsureEditorVisible();
+        Editor.Focus();
     }
 
     // ---------- Settings ----------
@@ -152,9 +268,13 @@ public partial class MainWindow : FluentWindow
 
     // ---------- Editing: formatting shortcuts, list continuation, find/replace ----------
 
+    private readonly FrontMatterColorizer _frontMatterColorizer = new();
+
     private void SetUpEditing()
     {
         FindBar.Attach(Editor);
+        // After the .xshd highlighter in the transformer list, so its colors win inside front matter.
+        Editor.TextArea.TextView.LineTransformers.Add(_frontMatterColorizer);
 
         // Window-level, so they also work from the preview (see OnPreviewKeyDown).
         AddKeyBinding(InputBindings, Key.F, ModifierKeys.Control, () => OpenFind(replace: false));
@@ -224,6 +344,11 @@ public partial class MainWindow : FluentWindow
         AddKeyBinding(InputBindings, Key.P, ModifierKeys.Control, () => _ = ExportAsync(ExportKind.Pdf));
         AddKeyBinding(InputBindings, Key.C, ModifierKeys.Control | ModifierKeys.Shift, () => _ = ExportAsync(ExportKind.Clipboard));
         AddKeyBinding(InputBindings, Key.OemComma, ModifierKeys.Control, OpenSettings);
+#if DEBUG
+        // Debug builds only: throw on purpose to exercise the crash safety net in App.
+        AddKeyBinding(InputBindings, Key.F12, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift,
+            () => throw new InvalidOperationException("Test error from the debug shortcut (Ctrl+Alt+Shift+F12)."));
+#endif
     }
 
     private void OnExportClick(object sender, RoutedEventArgs e)
@@ -343,6 +468,9 @@ public partial class MainWindow : FluentWindow
     {
         var dark = theme == ApplicationTheme.Dark;
         Editor.SyntaxHighlighting = MarkdownHighlighting.Get(dark);
+        _frontMatterColorizer.DelimiterBrush = MarkdownHighlighting.Brush("Dim", dark);
+        _frontMatterColorizer.KeyBrush = MarkdownHighlighting.Brush("Link", dark);
+        Editor.TextArea.TextView.Redraw();
         // Same resource as the editor card's background, so both panes are the exact same color.
         var background = TryFindResource("SolidBackgroundFillColorTertiary") is System.Windows.Media.Color c
             ? c
@@ -498,6 +626,23 @@ public partial class MainWindow : FluentWindow
         _sessionTimer.Start();
     }
 
+    /// <summary>
+    /// For the crash handlers in App: save right now, and never throw (a failure here must not become a
+    /// second crash), so unlike everywhere else this catches everything.
+    /// </summary>
+    internal bool PersistSessionNow()
+    {
+        try
+        {
+            _sessionTimer.Stop();
+            return PersistSession();
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     /// <summary>Saves tabs, unsaved text and window state. False if it couldn't be written.</summary>
     private bool PersistSession()
     {
@@ -578,6 +723,7 @@ public partial class MainWindow : FluentWindow
         _renderTimer.Stop();
         _renderTimer.Start();
         ScheduleSessionSave(); // backs up unsaved text shortly after typing pauses
+        ScheduleStats();
     }
 
     private void OnDocumentPropertyChanged(object? sender, PropertyChangedEventArgs e)

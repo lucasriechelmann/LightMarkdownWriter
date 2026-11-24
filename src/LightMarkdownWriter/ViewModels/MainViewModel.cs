@@ -137,6 +137,21 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void KeepMyVersion() => ActiveDocument?.IgnoreExternalChange();
 
+    // ---------- Status bar: encoding and line endings ----------
+
+    /// <summary>"utf-8" or "utf-8-bom".</summary>
+    [RelayCommand]
+    private void SetEncoding(string name) =>
+        ActiveDocument?.ChangeEncoding(new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: name == "utf-8-bom"));
+
+    /// <summary>"CRLF" or "LF". One undo step; marks the tab unsaved.</summary>
+    [RelayCommand]
+    private void ConvertLineEndings(string kind)
+    {
+        if (ActiveDocument is { } doc)
+            Editing.TextStats.ConvertLineEndings(doc.Document, kind == "LF" ? "\n" : "\r\n");
+    }
+
     partial void OnActiveDocumentChanged(DocumentViewModel? oldValue, DocumentViewModel? newValue)
     {
         if (oldValue is not null) oldValue.PropertyChanged -= OnActiveDocumentPropertyChanged;

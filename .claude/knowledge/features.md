@@ -10,6 +10,11 @@ Each feature, in user terms, with the code that owns it. Folder-level ownership 
 | **Formatting and lists** | Ctrl+B / I / E / K, Ctrl+Shift+K, command-bar buttons; Enter continues lists, tasks and quotes | `Editing/MarkdownFormatting.cs`, wired in `MainWindow.SetUpEditing` |
 | **Find and replace** | Ctrl+F / H, F3; match case, whole word and regex (Alt+C / W / R); highlights all matches; replace all as one undo step | `Views/FindReplaceBar.*`, `Editing/SearchResultRenderer.cs` |
 | **Live preview** | GFM, highlight.js, Mermaid, relative images, `.md` links open as tabs, external links open in the browser | `Services/MarkdownRenderer.cs`, `Views/PreviewView.*`, `Assets/Preview/` |
+| **GitHub alerts** | `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` and `[!CAUTION]` styled like GitHub in the preview, exports and clipboard | `MarkdownRenderer` (via `UseAdvancedExtensions`), `preview.css`/`export.css`, `preview.js` (`inlineStyles`) |
+| **YAML front matter** | A leading `---` block shows as a collapsed "Front matter" box, is left out of exports, and its keys are coloured in the editor | `MarkdownRenderer.FrontMatterHtml`, `Editing/FrontMatterColorizer.cs`, `preview.css` |
+| **Status bar** | Line and column (selection size), word count (of the selection), line endings and encoding; click to convert | `MainWindow.xaml` (status bar), `MainWindow.xaml.cs` (status bar section), `Editing/TextStats.cs`, `MainViewModel` (conversion commands) |
+| **Drag and drop** | Drop `.md`/`.txt` files to open them; drop images to insert links | `MainWindow.xaml.cs` (drag-and-drop section), `MarkdownFormatting.ImageLink` |
+| **Crash safety net** | Unexpected errors save everything, show a message and keep the app running; details go to `crash.log` | `App.xaml.cs` (crash safety net), `Services/CrashLog.cs`, `MainWindow.PersistSessionNow` |
 | **View modes** | Editor, Split or Preview (Ctrl+1 / 2 / 3); the splitter position is remembered | `MainViewModel.ViewMode`, `MainWindow.ApplyViewMode` |
 | **Scroll sync** | The editor and preview follow each other by source line | `MainWindow.xaml.cs` (scroll sync section), `Assets/Preview/preview.js` |
 | **Theme** | Follow Windows, or fixed Light/Dark; accent colour in editor links and preview links; `--theme=` override | `MainWindow.ApplyThemeSetting` / `ApplyPreviewTheme`, `App.xaml.cs` |

@@ -43,6 +43,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <ui:TitleBar Grid.Row="0" Title="{Binding WindowTitle}">
@@ -200,7 +201,7 @@
         </Border>
 
         <!-- Editor | splitter | preview -->
-        <Grid Grid.Row="4" Margin="8,4,8,8">
+        <Grid Grid.Row="4" Margin="8,4,8,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="EditorColumn" Width="*" />
                 <ColumnDefinition x:Name="SplitterColumn" Width="Auto" />
@@ -245,6 +246,48 @@
                 <!-- Padding keeps the square WebView inside the rounded corners. -->
                 <views:PreviewView x:Name="Preview" />
             </Border>
+        </Grid>
+
+        <!-- Status bar (Windows 11 Notepad style): position left; words, line endings, encoding right.
+             Line endings and encoding are menus that convert the active document. -->
+        <Grid Grid.Row="5" Margin="12,2,12,4" TextElement.FontSize="12">
+            <Grid.Resources>
+                <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                    <Setter Property="Appearance" Value="Transparent" />
+                    <Setter Property="BorderThickness" Value="0" />
+                    <Setter Property="Padding" Value="8,2" />
+                    <Setter Property="MinHeight" Value="0" />
+                    <Setter Property="FontSize" Value="12" />
+                    <Setter Property="Margin" Value="4,0,0,0" />
+                </Style>
+                <Style TargetType="TextBlock">
+                    <Setter Property="VerticalAlignment" Value="Center" />
+                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                </Style>
+            </Grid.Resources>
+
+            <TextBlock x:Name="CaretStatus" HorizontalAlignment="Left" Text="Ln 1, Col 1" />
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <TextBlock x:Name="WordStatus" Margin="0,0,8,0" />
+                <ui:Button x:Name="LineEndingButton" ToolTip="Line endings" Click="OnStatusMenuClick">
+                    <ui:Button.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Windows (CRLF)" Command="{Binding ConvertLineEndingsCommand}" CommandParameter="CRLF" />
+                            <MenuItem Header="Unix (LF)" Command="{Binding ConvertLineEndingsCommand}" CommandParameter="LF" />
+                        </ContextMenu>
+                    </ui:Button.ContextMenu>
+                </ui:Button>
+                <ui:Button x:Name="EncodingButton" ToolTip="Encoding used when saving"
+                           Content="{Binding ActiveDocument.EncodingLabel, FallbackValue=UTF-8}" Click="OnStatusMenuClick">
+                    <ui:Button.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="UTF-8" Command="{Binding SetEncodingCommand}" CommandParameter="utf-8" />
+                            <MenuItem Header="UTF-8 with BOM" Command="{Binding SetEncodingCommand}" CommandParameter="utf-8-bom" />
+                        </ContextMenu>
+                    </ui:Button.ContextMenu>
+                </ui:Button>
+            </StackPanel>
         </Grid>
     </Grid>
 </ui:FluentWindow>
