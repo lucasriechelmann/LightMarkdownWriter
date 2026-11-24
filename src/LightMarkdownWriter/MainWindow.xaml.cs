@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
@@ -195,14 +195,28 @@ public partial class MainWindow : FluentWindow
             : $"Ln {caret.Line}, Col {caret.Column}";
     }
 
-    private void UpdateDocumentStats()
+    private int _statsGeneration;
+
+    /// <summary>Word count and line endings scan the whole text: on a background thread for big documents (12.2).</summary>
+    private async void UpdateDocumentStats()
     {
         if (Editor.Document is not { } document) return;
-        var total = TextStats.CountWords(document.Text);
-        WordStatus.Text = Editor.SelectionLength > 0
-            ? $"{TextStats.CountWords(Editor.SelectedText):N0} of {total:N0} words"
-            : total == 1 ? "1 word" : $"{total:N0} words";
-        LineEndingButton.Content = TextStats.Label(TextStats.DetectLineEnding(document));
+        var text = document.Text;
+        var selected = Editor.SelectionLength > 0 ? Editor.SelectedText : null;
+        var generation = ++_statsGeneration;
+
+        (int Total, int? Selected, LineEnding Ending) Scan() =>
+            (TextStats.CountWords(text), selected is null ? null : TextStats.CountWords(selected), TextStats.DetectLineEnding(text));
+        var stats = text.Length < BackgroundWorkThreshold ? Scan() : await Task.Run(Scan);
+        if (generation != _statsGeneration || Editor.Document != document) return; // a newer scan is on its way
+
+        WordStatus.Text = stats.Selected is { } inSelection
+            ? $"{inSelection:N0} of {stats.Total:N0} words"
+            : stats.Total == 1 ? "1 word" : $"{stats.Total:N0} words";
+        var lineEndings = TextStats.Label(stats.Ending);
+        LineEndingButton.Content = lineEndings;
+        // Screen readers read the name instead of the text, so the name carries the value too.
+        System.Windows.Automation.AutomationProperties.SetName(LineEndingButton, $"Line endings: {lineEndings}");
     }
 
     private void OnStatusMenuClick(object sender, RoutedEventArgs e)
@@ -266,6 +280,111 @@ public partial class MainWindow : FluentWindow
         Editor.Focus();
     }
 
+    // ---------- Paste images (11.6) ----------
+
+    private void SetUpImagePaste()
+    {
+        // AvalonEdit only knows how to paste text; these run first and take over when the clipboard holds an image.
+        CommandManager.AddPreviewCanExecuteHandler(Editor.TextArea, (_, e) =>
+        {
+            if (e.Command == ApplicationCommands.Paste && ClipboardHasImage()) { e.CanExecute = true; e.Handled = true; }
+        });
+        CommandManager.AddPreviewExecutedHandler(Editor.TextArea, (_, e) =>
+        {
+            if (e.Command != ApplicationCommands.Paste || !ClipboardHasImage()) return;
+            e.Handled = true;
+            _ = PasteImageAsync();
+        });
+    }
+
+    /// <summary>Text on the clipboard always wins (Word and browsers put text and a picture there together).</summary>
+    private static bool ClipboardHasImage()
+    {
+        try
+        {
+            return !Clipboard.ContainsText() && (Clipboard.ContainsImage() || ClipboardImageFiles().Count > 0);
+        }
+        catch (System.Runtime.InteropServices.ExternalException) { return false; } // clipboard busy
+    }
+
+    /// <summary>Image files copied in File Explorer (Ctrl+C on the files).</summary>
+    private static List<string> ClipboardImageFiles() =>
+        Clipboard.ContainsFileDropList()
+            ? Clipboard.GetFileDropList().Cast<string>().Where(p => File.Exists(p) && MarkdownFormatting.IsImage(p)).ToList()
+            : [];
+
+    private async Task PasteImageAsync()
+    {
+        if (_viewModel.ActiveDocument is not { } doc) return;
+
+        // Copied image files are linked where they are, like dropping them.
+        if (ClipboardImageFiles() is { Count: > 0 } files)
+        {
+            var folder = doc.FilePath is null ? null : Path.GetDirectoryName(doc.FilePath);
+            InsertAtCaret(string.Join(Environment.NewLine, files.Select(f => MarkdownFormatting.ImageLink(f, folder))));
+            return;
+        }
+
+        // A picture (a screenshot, say) has to be written somewhere first: next to the document.
+        if (doc.FilePath is null)
+        {
+            var box = new Wpf.Ui.Controls.MessageBox
+            {
+                Title = "Paste image",
+                Content = "Save this document first. Pasted images are stored next to it, in an images folder.",
+                PrimaryButtonText = "Save as…",
+                CloseButtonText = "Cancel",
+            };
+            if (await box.ShowDialogAsync() != Wpf.Ui.Controls.MessageBoxResult.Primary) return;
+            _viewModel.SaveAsCommand.Execute(null);
+            if (doc.FilePath is null || _viewModel.ActiveDocument != doc) return; // Save as was cancelled
+        }
+
+        var documentFolder = Path.GetDirectoryName(doc.FilePath)!;
+        var path = MarkdownFormatting.PastedImagePath(documentFolder, DateTime.Now);
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            if (!WriteClipboardPng(path)) return;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.ExternalException)
+        {
+            new DialogService().ShowError($"Could not save the pasted image to {path}:\n{ex.Message}");
+            return;
+        }
+
+        // Undo removes the link; the image file stays (deleting files on undo could lose a picture used elsewhere).
+        InsertAtCaret(MarkdownFormatting.ImageLink(path, documentFolder));
+        ShowStatus($"Image saved as {Path.GetRelativePath(documentFolder, path).Replace('\\', '/')}", openPath: path);
+    }
+
+    /// <summary>
+    /// Writes the clipboard picture as a PNG. Screenshot tools also put a "PNG" stream there, which keeps
+    /// transparency exactly, so that's preferred over the bitmap (CF_DIB) that <see cref="Clipboard.GetImage"/> reads.
+    /// </summary>
+    private static bool WriteClipboardPng(string path)
+    {
+        if (Clipboard.GetData("PNG") is MemoryStream png)
+        {
+            using var file = File.Create(path);
+            png.CopyTo(file);
+            return true;
+        }
+        if (Clipboard.GetImage() is not { } bitmap) return false;
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+        using (var file = File.Create(path)) encoder.Save(file);
+        return true;
+    }
+
+    private void InsertAtCaret(string text)
+    {
+        var start = Editor.SelectionStart;
+        Editor.Document.Replace(start, Editor.SelectionLength, text);
+        Editor.Select(start + text.Length, 0);
+        Editor.Focus();
+    }
+
     // ---------- Settings ----------
 
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
@@ -279,10 +398,39 @@ public partial class MainWindow : FluentWindow
         {
             ApplyOutlineVisibility();
         }
+        else if (e.PropertyName == nameof(AppSettings.CheckForUpdates))
+        {
+            _ = CheckForUpdatesAsync(); // turned on: check now; turned off: hide the button
+        }
+        else if (e.PropertyName is nameof(AppSettings.LastUpdateCheckUtc) or nameof(AppSettings.LatestReleaseTag)
+                 or nameof(AppSettings.LatestReleaseUrl))
+        {
+            // Bookkeeping of the update check, not something to apply.
+        }
         else
         {
             ApplyEditorSettings();
         }
+    }
+
+    // ---------- Update check (13.3) ----------
+
+    private string? _updateUrl;
+
+    private async Task CheckForUpdatesAsync()
+    {
+        var update = await UpdateService.CheckAsync(_settings, UpdateService.CurrentVersion);
+        _updateUrl = update?.Url;
+        UpdateButton.Content = update is null ? null : $"Version {update.Version} available";
+        System.Windows.Automation.AutomationProperties.SetName(UpdateButton, update is null ? "" : $"Version {update.Version} available, open download page");
+        UpdateButton.Visibility = update is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void OnUpdateClick(object sender, RoutedEventArgs e)
+    {
+        // Only ever a github.com release page (UpdateService checks the URL it got from the API).
+        if (_updateUrl is not null)
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(_updateUrl) { UseShellExecute = true });
     }
 
     private void ApplyEditorSettings()
@@ -342,6 +490,8 @@ public partial class MainWindow : FluentWindow
         FindBar.Attach(Editor);
         // After the .xshd highlighter in the transformer list, so its colors win inside front matter.
         Editor.TextArea.TextView.LineTransformers.Add(_frontMatterColorizer);
+        AutoPairs.Attach(Editor, () => _settings.AutoClosePairs);
+        SetUpImagePaste();
 
         // Window-level, so they also work from the preview (see OnPreviewKeyDown).
         AddKeyBinding(InputBindings, Key.F, ModifierKeys.Control, () => OpenFind(replace: false));
@@ -356,6 +506,8 @@ public partial class MainWindow : FluentWindow
         AddKeyBinding(editorBindings, Key.E, ModifierKeys.Control, () => MarkdownFormatting.ToggleInline(Editor, "`"));
         AddKeyBinding(editorBindings, Key.K, ModifierKeys.Control, () => MarkdownFormatting.InsertLink(Editor));
         AddKeyBinding(editorBindings, Key.K, ModifierKeys.Control | ModifierKeys.Shift, () => MarkdownFormatting.InsertCodeBlock(Editor));
+        AddKeyBinding(editorBindings, Key.F, ModifierKeys.Control | ModifierKeys.Shift, () => TableFormatter.FormatOrInsert(Editor));
+        AddKeyBinding(editorBindings, Key.Enter, ModifierKeys.Control | ModifierKeys.Shift, () => TableFormatter.AddRow(Editor));
 
         Editor.TextArea.PreviewKeyDown += (_, e) =>
         {
@@ -398,7 +550,77 @@ public partial class MainWindow : FluentWindow
     private void OnInlineCodeClick(object sender, RoutedEventArgs e) => RunFormatting(ed => MarkdownFormatting.ToggleInline(ed, "`"));
     private void OnLinkClick(object sender, RoutedEventArgs e) => RunFormatting(MarkdownFormatting.InsertLink);
     private void OnCodeBlockClick(object sender, RoutedEventArgs e) => RunFormatting(MarkdownFormatting.InsertCodeBlock);
+    private void OnTableClick(object sender, RoutedEventArgs e) => RunFormatting(ed => TableFormatter.FormatOrInsert(ed));
     private void OnFindClick(object sender, RoutedEventArgs e) => OpenFind(replace: false);
+
+    // ---------- Tab strip: drag to reorder, context menu (11.4) ----------
+
+    private DocumentViewModel? _draggedTab;
+    private Point _dragStart;
+
+    /// <summary>The tab (its document) under the mouse, if any.</summary>
+    private DocumentViewModel? TabAt(MouseEventArgs e) =>
+        TabStrip.InputHitTest(e.GetPosition(TabStrip)) is DependencyObject hit
+        && System.Windows.Controls.ItemsControl.ContainerFromElement(TabStrip, hit) is System.Windows.Controls.TabItem { DataContext: DocumentViewModel doc } ? doc : null;
+
+    private void OnTabStripMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        // Not handled: the click still selects the tab (or presses its close button).
+        _draggedTab = TabAt(e);
+        _dragStart = e.GetPosition(TabStrip);
+    }
+
+    private void OnTabStripMouseUp(object sender, MouseButtonEventArgs e) => _draggedTab = null;
+
+    /// <summary>
+    /// Reorders live while dragging, like a browser. No OLE drag-and-drop: the window already handles file drops,
+    /// and moving the tab under the mouse needs no data transfer.
+    /// </summary>
+    private void OnTabStripMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_draggedTab is not { } dragged || e.LeftButton != MouseButtonState.Pressed)
+        {
+            _draggedTab = null;
+            return;
+        }
+        var position = e.GetPosition(TabStrip);
+        if (Math.Abs(position.X - _dragStart.X) < SystemParameters.MinimumHorizontalDragDistance) return;
+        if (TabAt(e) is not { } target || target == dragged) return;
+
+        // Swap only once the mouse passes the middle of the tab it's over. Tabs differ in width, so swapping as soon
+        // as the mouse touches a neighbour would make it land under the mouse again and swap straight back.
+        var targetIndex = _viewModel.Documents.IndexOf(target);
+        if (TabStrip.ItemContainerGenerator.ContainerFromItem(target) is not System.Windows.Controls.TabItem container) return;
+        var middle = container.TranslatePoint(new Point(container.ActualWidth / 2, 0), TabStrip).X;
+        var movingRight = targetIndex > _viewModel.Documents.IndexOf(dragged);
+        if (movingRight ? position.X < middle : position.X > middle) return;
+
+        _viewModel.MoveTab(dragged, targetIndex);
+    }
+
+    private static DocumentViewModel? MenuDocument(object sender) =>
+        (sender as FrameworkElement)?.DataContext as DocumentViewModel;
+
+    private void OnTabMenuOpened(object sender, RoutedEventArgs e)
+    {
+        var hasPath = MenuDocument(sender)?.FilePath is not null;
+        foreach (var item in ((System.Windows.Controls.ContextMenu)sender).Items.OfType<System.Windows.Controls.MenuItem>())
+            if (item.Name is "CopyPathItem" or "RevealItem") item.IsEnabled = hasPath;
+    }
+
+    private void OnCopyPathClick(object sender, RoutedEventArgs e)
+    {
+        if (MenuDocument(sender)?.FilePath is not { } path) return;
+        try { Clipboard.SetText(path); }
+        catch (System.Runtime.InteropServices.ExternalException) { /* clipboard busy in another app; the user can retry */ }
+    }
+
+    private void OnRevealClick(object sender, RoutedEventArgs e)
+    {
+        if (MenuDocument(sender)?.FilePath is not { } path) return;
+        // explorer.exe /select opens the folder with the file highlighted (or just the folder if the file is gone).
+        System.Diagnostics.Process.Start("explorer.exe", File.Exists(path) ? $"/select,\"{path}\"" : $"\"{Path.GetDirectoryName(path)}\"");
+    }
 
     // ---------- Export ----------
 
@@ -416,6 +638,22 @@ public partial class MainWindow : FluentWindow
         AddKeyBinding(InputBindings, Key.OemComma, ModifierKeys.Control, OpenSettings);
         AddKeyBinding(InputBindings, Key.G, ModifierKeys.Control, OpenGoToLine);
         AddKeyBinding(InputBindings, Key.O, ModifierKeys.Control | ModifierKeys.Shift, ToggleOutline);
+
+        // Zoom (11.5): the editor font size. Both the main-keyboard and the numpad keys; Ctrl+Shift+= is Ctrl++.
+        foreach (var (key, modifiers, step) in new[]
+                 {
+                     (Key.OemPlus, ModifierKeys.Control, 1), (Key.OemPlus, ModifierKeys.Control | ModifierKeys.Shift, 1),
+                     (Key.Add, ModifierKeys.Control, 1), (Key.OemMinus, ModifierKeys.Control, -1),
+                     (Key.Subtract, ModifierKeys.Control, -1), (Key.D0, ModifierKeys.Control, 0), (Key.NumPad0, ModifierKeys.Control, 0),
+                 })
+            AddKeyBinding(InputBindings, key, modifiers, () => Zoom(step));
+        // Ctrl+wheel over the editor only; over the preview WebView2 keeps its own page zoom.
+        Editor.PreviewMouseWheel += (_, e) =>
+        {
+            if (Keyboard.Modifiers != ModifierKeys.Control) return;
+            Zoom(Math.Sign(e.Delta));
+            e.Handled = true;
+        };
 #if DEBUG
         // Debug builds only: throw on purpose to exercise the crash safety net in App.
         AddKeyBinding(InputBindings, Key.F12, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift,
@@ -481,6 +719,14 @@ public partial class MainWindow : FluentWindow
         }
     }
 
+    /// <summary>+1 / -1 changes the editor font size by a point; 0 resets it. Saved like any other setting.</summary>
+    private void Zoom(int step)
+    {
+        _settings.FontSize = step == 0 ? AppSettings.DefaultFontSize : _settings.FontSize + step;
+        var percent = (int)Math.Round(_settings.FontSize / AppSettings.DefaultFontSize * 100);
+        ShowStatus($"Editor zoom {percent}% ({_settings.FontSize:0} pt)", openPath: null);
+    }
+
     private void ShowStatus(string message, string? openPath)
     {
         StatusText.Text = message;
@@ -532,6 +778,8 @@ public partial class MainWindow : FluentWindow
             new Services.DialogService().ShowError(
                 "The Microsoft Edge WebView2 Runtime is required for the preview.\nInstall it from https://go.microsoft.com/fwlink/p/?LinkId=2124703");
         }
+
+        await CheckForUpdatesAsync(); // after the window and preview are up; fails silently when offline
     }
 
     private void OnThemeChanged(ApplicationTheme theme, System.Windows.Media.Color accent) =>
@@ -791,9 +1039,25 @@ public partial class MainWindow : FluentWindow
         }
     }
 
+    /// <summary>
+    /// Documents up to this many characters render synchronously on the UI thread (about 20 ms at this size);
+    /// bigger ones render on a background thread so typing never waits for Markdig (12.2: 1 MB took ~190 ms,
+    /// 5 MB ~930 ms). Measured numbers are in PLAN.md.
+    /// </summary>
+    private const int BackgroundWorkThreshold = 100_000;
+
+    /// <summary>Wait longer after typing in big documents, so a render doesn't start on every short pause.</summary>
+    private static TimeSpan RenderDelay(int length) => length switch
+    {
+        < BackgroundWorkThreshold => TimeSpan.FromMilliseconds(150),
+        < 1_000_000 => TimeSpan.FromMilliseconds(400),
+        _ => TimeSpan.FromMilliseconds(800),
+    };
+
     private void OnDocumentTextChanged(object? sender, EventArgs e)
     {
         _renderTimer.Stop();
+        _renderTimer.Interval = RenderDelay(_watchedDocument?.Document.TextLength ?? 0);
         _renderTimer.Start();
         ScheduleSessionSave(); // backs up unsaved text shortly after typing pauses
         ScheduleStats();
@@ -806,19 +1070,32 @@ public partial class MainWindow : FluentWindow
             RenderPreview();
     }
 
-    /// <summary>One parse feeds both the preview and the outline; skipped when neither is visible.</summary>
-    private void RenderPreview(bool force = false)
+    private int _renderGeneration;
+
+    /// <summary>
+    /// One parse feeds both the preview and the outline; skipped when neither is visible. Big documents are parsed
+    /// on a background thread from a snapshot of the text; if the text or tab changed meanwhile, the result is
+    /// dropped, because a newer render is already scheduled.
+    /// </summary>
+    private async void RenderPreview(bool force = false)
     {
         _renderTimer.Stop();
         var previewVisible = _appliedMode != ViewMode.Editor || force;
         if (_watchedDocument is not { } doc || (!previewVisible && !_settings.ShowOutline)) return;
 
-        var result = MarkdownRenderer.Render(doc.Document.Text);
+        var text = doc.Document.Text; // TextDocument belongs to the UI thread: snapshot it here
+        var lineCount = doc.Document.LineCount;
+        var generation = ++_renderGeneration;
+        var result = text.Length < BackgroundWorkThreshold
+            ? MarkdownRenderer.Render(text)
+            : await Task.Run(() => MarkdownRenderer.Render(text)); // Markdig pipelines are thread-safe
+        if (generation != _renderGeneration || _watchedDocument != doc) return;
+
         if (_settings.ShowOutline) UpdateOutline(result.Headings);
         if (!previewVisible) return;
 
         var folder = doc.FilePath is null ? null : Path.GetDirectoryName(doc.FilePath);
-        Preview.ShowHtml(result.Html, folder, doc.Document.LineCount);
+        Preview.ShowHtml(result.Html, folder, lineCount);
     }
 
     // ---------- Outline (9.4) and Go to line (9.3) ----------

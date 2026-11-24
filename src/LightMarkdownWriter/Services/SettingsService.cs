@@ -17,8 +17,11 @@ public partial class AppSettings : ObservableObject
     [ObservableProperty]
     private string _fontFamily = "Cascadia Mono";
 
+    public const double DefaultFontSize = 14, MinFontSize = 8, MaxFontSize = 40;
+
+    /// <summary>The editor font size; also what zoom (Ctrl+wheel, Ctrl+= / Ctrl+- / Ctrl+0) changes.</summary>
     [ObservableProperty]
-    private double _fontSize = 14;
+    private double _fontSize = DefaultFontSize;
 
     [ObservableProperty]
     private bool _wordWrap = true;
@@ -30,6 +33,24 @@ public partial class AppSettings : ObservableObject
     [ObservableProperty]
     private bool _showOutline;
 
+    /// <summary>Typing ( [ ` " inserts the closing character too, and wraps a selection (<c>Editing/AutoPairs</c>).</summary>
+    [ObservableProperty]
+    private bool _autoClosePairs = true;
+
+    /// <summary>Ask GitHub once a day whether a newer release exists (<see cref="UpdateService"/>); never installs anything.</summary>
+    [ObservableProperty]
+    private bool _checkForUpdates = true;
+
+    // The last update check's result, so the app asks GitHub at most once a day and can still show a known update.
+    [ObservableProperty]
+    private DateTimeOffset? _lastUpdateCheckUtc;
+
+    [ObservableProperty]
+    private string? _latestReleaseTag;
+
+    [ObservableProperty]
+    private string? _latestReleaseUrl;
+
     /// <summary>For the theme ComboBox (System / Light / Dark).</summary>
     [JsonIgnore]
     public int ThemeIndex
@@ -40,7 +61,7 @@ public partial class AppSettings : ObservableObject
 
     partial void OnFontSizeChanged(double value)
     {
-        if (value is < 8 or > 40) FontSize = Math.Clamp(value, 8, 40);
+        if (value is < MinFontSize or > MaxFontSize) FontSize = Math.Clamp(value, MinFontSize, MaxFontSize);
     }
 
     partial void OnFontFamilyChanged(string value)

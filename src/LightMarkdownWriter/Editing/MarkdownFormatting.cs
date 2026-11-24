@@ -157,6 +157,20 @@ public static partial class MarkdownFormatting
         return $"![{alt}]({target})";
     }
 
+    /// <summary>
+    /// Where a pasted image is saved: <c>images/image-20261124-153012.png</c> next to the document, with -2, -3…
+    /// added when that name is taken (two pastes in the same second). The folder isn't created here.
+    /// </summary>
+    public static string PastedImagePath(string documentFolder, DateTime now)
+    {
+        var folder = System.IO.Path.Combine(documentFolder, "images");
+        var name = $"image-{now:yyyyMMdd-HHmmss}";
+        var path = System.IO.Path.Combine(folder, name + ".png");
+        for (var n = 2; System.IO.File.Exists(path); n++)
+            path = System.IO.Path.Combine(folder, $"{name}-{n}.png");
+        return path;
+    }
+
     [GeneratedRegex(@"^(?<indent>[ \t]*)(?:(?<bullet>[-*+])|(?<num>\d{1,9})(?<delim>[.)]))(?<space>[ \t]+)(?<task>\[[ xX]\][ \t]+)?")]
     private static partial Regex ListItemPrefix();
 

@@ -40,9 +40,10 @@ public sealed class SessionService
     private readonly string _sessionFile;
     private readonly string _backupFolder;
 
-    public SessionService()
+    /// <param name="root">The app-data folder; tests pass a temporary one. Defaults to %LOCALAPPDATA%\LightMarkdownWriter.</param>
+    public SessionService(string? root = null)
     {
-        var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LightMarkdownWriter");
+        root ??= Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LightMarkdownWriter");
         _sessionFile = Path.Combine(root, "session.json");
         _backupFolder = Path.Combine(root, "backups");
     }

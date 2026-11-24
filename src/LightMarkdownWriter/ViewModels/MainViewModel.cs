@@ -325,6 +325,47 @@ public partial class MainViewModel : ObservableObject
             ActiveDocument = Documents[Math.Min(index, Documents.Count - 1)];
     }
 
+    // ---------- Tab management (11.4) ----------
+
+    /// <summary>Closes every tab except this one. Only unsaved tabs ask; Cancel stops there and keeps the rest.</summary>
+    [RelayCommand]
+    private Task CloseOthers(DocumentViewModel? doc) =>
+        doc is null ? Task.CompletedTask : CloseManyAsync(doc, Documents.Where(d => d != doc));
+
+    /// <summary>Closes the tabs to the right of this one, with the same prompts as <see cref="CloseOthers"/>.</summary>
+    [RelayCommand]
+    private Task CloseToTheRight(DocumentViewModel? doc) =>
+        doc is null ? Task.CompletedTask : CloseManyAsync(doc, Documents.Skip(Documents.IndexOf(doc) + 1));
+
+    private async Task CloseManyAsync(DocumentViewModel keep, IEnumerable<DocumentViewModel> toClose)
+    {
+        foreach (var doc in toClose.ToList())
+        {
+            if (!await ConfirmDiscardAsync(doc)) break;
+            RememberClosed(doc);
+            Documents.Remove(doc);
+        }
+        ActiveDocument = keep;
+    }
+
+    /// <summary>Ctrl+Alt+S: saves every unsaved tab. Untitled tabs ask for a name; cancelling one skips just that tab.</summary>
+    [RelayCommand]
+    private void SaveAll()
+    {
+        foreach (var doc in Documents.Where(d => d.IsDirty).ToList())
+            TrySave(doc, forceDialog: false);
+    }
+
+    /// <summary>Moves a tab to a new position (dragging in the tab strip). The order is saved with the session.</summary>
+    public void MoveTab(DocumentViewModel doc, int newIndex)
+    {
+        var oldIndex = Documents.IndexOf(doc);
+        newIndex = Math.Clamp(newIndex, 0, Documents.Count - 1);
+        if (oldIndex < 0 || oldIndex == newIndex) return;
+        Documents.Move(oldIndex, newIndex);
+        ActiveDocument = doc; // the tab strip can drop its selection while the item moves
+    }
+
     /// <summary>Asks about every unsaved tab. Returns false if the user cancelled.
     /// Only used as a fallback when the session can't be saved; normally closing keeps unsaved text.</summary>
     public async Task<bool> ConfirmCloseAllAsync()

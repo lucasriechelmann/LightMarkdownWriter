@@ -71,6 +71,9 @@ Each pattern below names a real file to copy from.
 - UI changes are verified in the running app.
 - Registry tests use a throwaway `HKCU\Software\LightMarkdownWriter.Tests\{guid}` key, deleted in `Dispose`. Never touch the real file associations. Reference: `FileAssociationServiceTests.cs`.
 - Filesystem tests use `Directory.CreateTempSubdirectory`. Reference: `ExportAndDocumentTests.cs`.
+- Editor features take a `TextDocument` plus offsets and return the new selection (`MarkdownFormatting.ShiftListItems`, `AutoPairs.Type`, `TableFormatter.FormatOrInsert`); a thin `TextEditor` overload applies it. `TextEditor` needs a UI thread, `TextDocument` doesn't. Text anchors (`doc.CreateAnchor`) keep the caret on the same text through edits.
+- `SessionService(root)` and `UpdateService.CheckAsync(…, handler, now)` take a folder / fake HTTP handler / clock for tests (`Milestone11Tests`, `Milestone13Tests`). Never hit the real network in tests.
+- `Milestone12Tests` parses every `.xaml` and fails on a button, toggle or input without visible text or `AutomationProperties.Name`. Name new icon-only buttons.
 - Pure logic that sits next to an OS call gets split out so it can be tested. For example, `ExportService.BuildCfHtml` is separate from `CopyHtmlToClipboard`.
 
 ## Gotchas (hard-won)
@@ -102,6 +105,8 @@ Each pattern below names a real file to copy from.
 - Cascadia **Code** ligatures disguise markdown syntax (`=>`, `-->`, `|---`), so the default is Cascadia **Mono**.
 
 **UI tests on the real desktop** (see PLAN.md for context)
+- **`keybd_event` and `mouse_event` go to whatever window is in front, not to the app.** If the developer switches windows mid-run, the keystrokes land in their window (it happened during 11.x: Ctrl+Z, Ctrl+S and Enter reached a Remote Desktop session). Before sending input, check `GetForegroundWindow` belongs to LightMarkdownWriter, and stop if it doesn't. Only run input-driven tests when the developer agrees they're away from the keyboard.
+- **Typing text without that risk:** post `WM_CHAR` to the app's window handle (`PostMessage(hwnd, 0x0102, ch, 1)`). WPF turns it into `TextInput`, so `(` and `"` need no Shift and nothing goes to another window. It can't send shortcuts (Ctrl+…).
 - WScript `SendKeys` drops modifiers. Shift+navigation keys become numpad keys when NumLock is on, and Ctrl sometimes goes missing too. Use `keybd_event` and press each modifier explicitly.
 - Test windows grab focus, so the developer's own typing can end up in them. Launch with `-WindowStyle Minimized` when you're only checking state.
 - Inspect the preview with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333` and Chrome DevTools Protocol `Runtime.evaluate`.

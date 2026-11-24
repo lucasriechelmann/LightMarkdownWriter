@@ -19,12 +19,16 @@ A light, fast markdown editor for Windows 11 with a live, GitHub-style preview.
 - **Two-way scroll sync** between editor and preview. It follows source lines, so tall images and diagrams don't make the panes drift apart.
 - **Split, editor-only or preview-only** views.
 - **Find your way around:** a heading outline (Ctrl+Shift+O), go to line (Ctrl+G), recent files (also in the taskbar jump list), and Ctrl+Shift+T to reopen closed tabs.
-- **Tabs that survive restarts.** Closing never asks to save: every tab, its unsaved text, caret and scroll position come back next time.
+- **Tabs that survive restarts.** Closing never asks to save: every tab, its unsaved text, caret and scroll position come back next time. Drag tabs to reorder them; right-click a tab for Close others, Close to the right, Save all, Copy path and Reveal in File Explorer.
 - **Edits from other programs are detected.** A clean tab reloads in place; a tab with unsaved edits asks you what to do.
 - **Editing helpers:**
   - markdown syntax colours
   - bold/italic/code/link/code-block shortcuts
   - lists continue on Enter, and Tab / Shift+Tab nest and un-nest list items
+  - brackets and quotes close themselves and wrap a selection (can be turned off)
+  - tables: Ctrl+Shift+F lines up a messy table, Ctrl+Shift+Enter adds a row
+  - paste a screenshot to save it next to the document (in `images/`) and insert the link
+  - zoom the editor with Ctrl+wheel or Ctrl+= / Ctrl+- / Ctrl+0
   - find & replace with regex
   - drag files in to open them, or drag images in to insert links
 - **Status bar** with line and column, word count, line endings and encoding. Click the last two to convert, for example CRLF ↔ LF or adding/removing the UTF-8 BOM.
@@ -32,6 +36,7 @@ A light, fast markdown editor for Windows 11 with a live, GitHub-style preview.
 - **Export** as a standalone HTML file or a PDF, or **copy as HTML** that pastes cleanly into Outlook, Word or Teams. Exports are always light-themed.
 - **Windows 11 look:** Mica, Fluent controls, and your Windows light/dark theme and accent colour.
 - **One small exe.** A single portable file, one window, and a second launch opens its files in the running window.
+- **Update check.** Once a day the app asks GitHub for the latest release and, if there's a newer one, shows a button that opens the download page. It sends nothing about you or your files, never installs anything itself, and can be turned off in Settings. It's the app's only network request.
 
 ## Install
 
@@ -50,7 +55,7 @@ There are two downloads on each [release](https://github.com/lucasriechelmann/Li
 
 | Action | Shortcut |
 |---|---|
-| New / Open / Save / Save as | Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+Shift+S |
+| New / Open / Save / Save as / Save all | Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+Shift+S / Ctrl+Alt+S |
 | Close tab / reopen closed tab | Ctrl+W or middle-click the tab / Ctrl+Shift+T |
 | Next / previous tab | Ctrl+Tab / Ctrl+Shift+Tab |
 | Editor / Split / Preview | Ctrl+1 / Ctrl+2 / Ctrl+3 |
@@ -58,6 +63,8 @@ There are two downloads on each [release](https://github.com/lucasriechelmann/Li
 | Bold / Italic / Inline code | Ctrl+B / Ctrl+I / Ctrl+E |
 | Link / Code block | Ctrl+K / Ctrl+Shift+K |
 | Nest / un-nest a list item | Tab / Shift+Tab (on a list line) |
+| Format table (or insert one) / add a row | Ctrl+Shift+F / Ctrl+Shift+Enter |
+| Zoom in / out / reset | Ctrl+= / Ctrl+- / Ctrl+0, or Ctrl+mouse wheel |
 | Find / Replace | Ctrl+F / Ctrl+H |
 | Next / previous match | F3 / Shift+F3 (Enter / Shift+Enter in the find box) |
 | Match case / whole word / regex | Alt+C / Alt+W / Alt+R (in the find box) |

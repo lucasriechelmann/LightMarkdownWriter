@@ -51,7 +51,7 @@
                             <TextBlock Style="{StaticResource CardDescription}" Text="Also used by the preview. Exports are always light." />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <ComboBox MinWidth="160" SelectedIndex="{Binding ThemeIndex}">
+                    <ComboBox MinWidth="160" SelectedIndex="{Binding ThemeIndex}" AutomationProperties.Name="App theme">
                         <ComboBoxItem Content="Use system setting" />
                         <ComboBoxItem Content="Light" />
                         <ComboBoxItem Content="Dark" />
@@ -67,7 +67,7 @@
                             <TextBlock Style="{StaticResource CardDescription}" Text="Monospaced fonts installed on this PC." />
                         </StackPanel>
                     </ui:CardControl.Header>
-                    <ComboBox x:Name="FontCombo" MinWidth="200" IsEditable="True"
+                    <ComboBox x:Name="FontCombo" MinWidth="200" IsEditable="True" AutomationProperties.Name="Font"
                               Text="{Binding FontFamily, UpdateSourceTrigger=LostFocus}">
                         <ComboBox.ItemTemplate>
                             <DataTemplate>
@@ -80,20 +80,30 @@
                     <ui:CardControl.Header>
                         <TextBlock Style="{StaticResource CardTitle}" Text="Font size" VerticalAlignment="Center" />
                     </ui:CardControl.Header>
-                    <ui:NumberBox Width="140" Minimum="8" Maximum="40" SmallChange="1" LargeChange="4"
+                    <ui:NumberBox Width="140" AutomationProperties.Name="Font size" Minimum="8" Maximum="40" SmallChange="1" LargeChange="4"
                                   MaxDecimalPlaces="0" Value="{Binding FontSize, UpdateSourceTrigger=PropertyChanged}" />
                 </ui:CardControl>
                 <ui:CardControl Icon="{ui:SymbolIcon TextWrap24}">
                     <ui:CardControl.Header>
                         <TextBlock Style="{StaticResource CardTitle}" Text="Word wrap" VerticalAlignment="Center" />
                     </ui:CardControl.Header>
-                    <ui:ToggleSwitch IsChecked="{Binding WordWrap}" />
+                    <ui:ToggleSwitch IsChecked="{Binding WordWrap}" AutomationProperties.Name="Word wrap" />
                 </ui:CardControl>
                 <ui:CardControl Icon="{ui:SymbolIcon DocumentOnePage24}">
                     <ui:CardControl.Header>
                         <TextBlock Style="{StaticResource CardTitle}" Text="Line numbers" VerticalAlignment="Center" />
                     </ui:CardControl.Header>
-                    <ui:ToggleSwitch IsChecked="{Binding ShowLineNumbers}" />
+                    <ui:ToggleSwitch IsChecked="{Binding ShowLineNumbers}" AutomationProperties.Name="Line numbers" />
+                </ui:CardControl>
+                <ui:CardControl Icon="{ui:SymbolIcon BracesVariable24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="Close brackets and quotes" />
+                            <TextBlock Style="{StaticResource CardDescription}"
+                                       Text="Typing ( [ ` or &quot; adds the closing character, and wraps selected text." />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:ToggleSwitch IsChecked="{Binding AutoClosePairs}" AutomationProperties.Name="Close brackets and quotes" />
                 </ui:CardControl>
 
                 <!-- Files -->
@@ -119,6 +129,19 @@
                         </StackPanel>
                     </ui:CardControl.Header>
                     <ui:Button Content="Open Default apps" Click="OnDefaultAppsClick" />
+                </ui:CardControl>
+
+                <!-- Updates -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="Updates" />
+                <ui:CardControl Icon="{ui:SymbolIcon ArrowSync24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="Check for updates" />
+                            <TextBlock Style="{StaticResource CardDescription}"
+                                       Text="Once a day, asks GitHub for the latest release and shows a button when there's a new version. Nothing downloads or installs by itself." />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:ToggleSwitch IsChecked="{Binding CheckForUpdates}" AutomationProperties.Name="Check for updates" />
                 </ui:CardControl>
 
                 <!-- About -->

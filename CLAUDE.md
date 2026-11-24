@@ -16,13 +16,14 @@ A light markdown editor for Windows with a live, GitHub-style preview. It's desi
 | `docs/` | GitHub Pages site (`index.html`, favicon, README screenshot). Served from `main` `/docs`. |
 | `tools/make-icon.ps1` | Regenerates `src/LightMarkdownWriter/Assets/app.ico` and the 16–256 px sizes. |
 | `installer/` | Inno Setup 6 script and `build-installer.ps1`, for a per-user installer with .NET bundled. |
+| `.github/workflows/release.yml` | Builds a **draft** GitHub release (tests, both exes, SHA256SUMS, attestations) when a `v*` tag is pushed. Not yet run once. |
 | `PLAN.md` | **Design log.** The original plan plus the reasons behind non-obvious decisions. Keep it, and add new decisions to it. |
 
 Inside the app project:
 - `ViewModels/`: MVVM state for tabs and documents.
 - `Views/`: preview, find bar and settings window.
-- `Editing/`: AvalonEdit add-ons.
-- `Services/`: rendering, export, session, settings, file association, single instance.
+- `Editing/`: AvalonEdit add-ons (highlighting, list/inline formatting, auto-close pairs, tables, text stats).
+- `Services/`: rendering, export, session, settings, file association, single instance, update check (the only network call).
 - `Assets/Preview/`: the preview web page and vendored JS/CSS, embedded into the exe.
 
 ## Standing rules
@@ -49,7 +50,9 @@ dotnet run --project src/LightMarkdownWriter -- file.md   # --theme=light|dark|s
 
 **Verifying a change:** `dotnet test` must pass. UI changes are checked in the running app.
 
-**Release** (a manual process for now):
+**Release, with the workflow** (13.1; its first run is still pending): bump `<Version>`, commit and push, then `git tag -a vX.Y.Z -m "vX.Y.Z"` and `git push origin vX.Y.Z`. The workflow checks the tag matches `<Version>` and creates a **draft** release; smoke-test the downloaded files, edit the notes, then publish the draft. If the workflow fails, use the manual steps.
+
+**Release by hand** (fallback):
 1. Bump `<Version>` in `src/LightMarkdownWriter/LightMarkdownWriter.csproj`, then commit and push.
 2. **Portable exe:** run `dotnet publish src/LightMarkdownWriter -p:PublishProfile=win-x64`. This produces `artifacts/publish/LightMarkdownWriter.exe` (framework-dependent).
 3. **Installer:** run `./installer/build-installer.ps1`. It needs Inno Setup 6, and produces `artifacts/installer/LightMarkdownWriter-Setup.exe` (self-contained) plus `.sha256`.

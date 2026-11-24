@@ -28,6 +28,7 @@
         <KeyBinding Key="O" Modifiers="Control" Command="{Binding OpenCommand}" />
         <KeyBinding Key="S" Modifiers="Control" Command="{Binding SaveCommand}" />
         <KeyBinding Key="S" Modifiers="Control+Shift" Command="{Binding SaveAsCommand}" />
+        <KeyBinding Key="S" Modifiers="Control+Alt" Command="{Binding SaveAllCommand}" />
         <KeyBinding Key="W" Modifiers="Control" Command="{Binding CloseTabCommand}" />
         <KeyBinding Key="T" Modifiers="Control+Shift" Command="{Binding ReopenClosedTabCommand}" />
         <KeyBinding Key="F4" Modifiers="Control" Command="{Binding CloseTabCommand}" />
@@ -74,7 +75,7 @@
                 <ui:Button Icon="{ui:SymbolIcon DocumentAdd24}" Content="New" Command="{Binding NewCommand}" ToolTip="New (Ctrl+N)" />
                 <ui:Button Icon="{ui:SymbolIcon FolderOpen24}" Content="Open" Command="{Binding OpenCommand}" ToolTip="Open (Ctrl+O)" />
                 <!-- Recent files: the menu is built when opened (only files that still exist). -->
-                <ui:Button x:Name="RecentButton" Icon="{ui:SymbolIcon History24}" ToolTip="Recent files and closed tabs"
+                <ui:Button x:Name="RecentButton" Icon="{ui:SymbolIcon History24}" ToolTip="Recent files and closed tabs" AutomationProperties.Name="Recent files"
                            Click="OnRecentClick" Margin="-2,0,2,0">
                     <ui:Button.ContextMenu>
                         <ContextMenu />
@@ -103,12 +104,14 @@
                 <Rectangle Width="1" Margin="8,6" Fill="{DynamicResource DividerStrokeColorDefaultBrush}" />
 
                 <!-- Formatting acts on the editor, so these are handled in code-behind. -->
-                <ui:Button Icon="{ui:SymbolIcon TextBold20}" ToolTip="Bold (Ctrl+B)" Click="OnBoldClick" />
-                <ui:Button Icon="{ui:SymbolIcon TextItalic20}" ToolTip="Italic (Ctrl+I)" Click="OnItalicClick" />
-                <ui:Button Icon="{ui:SymbolIcon Code20}" ToolTip="Inline code (Ctrl+E)" Click="OnInlineCodeClick" />
-                <ui:Button Icon="{ui:SymbolIcon Link20}" ToolTip="Link (Ctrl+K)" Click="OnLinkClick" />
-                <ui:Button Icon="{ui:SymbolIcon CodeBlock20}" ToolTip="Code block (Ctrl+Shift+K)" Click="OnCodeBlockClick" />
-                <ui:Button Icon="{ui:SymbolIcon Search20}" ToolTip="Find (Ctrl+F) / Replace (Ctrl+H)" Click="OnFindClick" />
+                <ui:Button Icon="{ui:SymbolIcon TextBold20}" ToolTip="Bold (Ctrl+B)" AutomationProperties.Name="Bold" Click="OnBoldClick" />
+                <ui:Button Icon="{ui:SymbolIcon TextItalic20}" ToolTip="Italic (Ctrl+I)" AutomationProperties.Name="Italic" Click="OnItalicClick" />
+                <ui:Button Icon="{ui:SymbolIcon Code20}" ToolTip="Inline code (Ctrl+E)" AutomationProperties.Name="Inline code" Click="OnInlineCodeClick" />
+                <ui:Button Icon="{ui:SymbolIcon Link20}" ToolTip="Link (Ctrl+K)" AutomationProperties.Name="Link" Click="OnLinkClick" />
+                <ui:Button Icon="{ui:SymbolIcon CodeBlock20}" ToolTip="Code block (Ctrl+Shift+K)" AutomationProperties.Name="Code block" Click="OnCodeBlockClick" />
+                <ui:Button Icon="{ui:SymbolIcon Table20}" ToolTip="Table: format the table at the caret, or insert one (Ctrl+Shift+F). Add a row: Ctrl+Shift+Enter"
+                           Click="OnTableClick" AutomationProperties.Name="Table" />
+                <ui:Button Icon="{ui:SymbolIcon Search20}" ToolTip="Find (Ctrl+F) / Replace (Ctrl+H)" AutomationProperties.Name="Find" Click="OnFindClick" />
             </StackPanel>
 
             <!-- Export result. Lives in the command bar rather than as a toast over the content, because the
@@ -139,20 +142,24 @@
                         <Setter Property="Margin" Value="2,0,0,0" />
                     </Style>
                 </StackPanel.Resources>
+                <!-- Shown only when GitHub has a newer release (13.3). Opens the download page; nothing installs itself. -->
+                <ui:Button x:Name="UpdateButton" Icon="{ui:SymbolIcon ArrowDownload24}" Appearance="Secondary"
+                           Padding="10,4" Margin="0,0,8,0" Visibility="Collapsed" Click="OnUpdateClick"
+                           ToolTip="Open the download page for the new version" AutomationProperties.Name="Update available" />
                 <ui:Button x:Name="OutlineButton" Icon="{ui:SymbolIcon TextBulletListTree24}" ToolTip="Outline (Ctrl+Shift+O)"
                            Click="OnOutlineToggleClick" AutomationProperties.Name="Toggle outline"
                            Appearance="Transparent" BorderThickness="0" Padding="8,6" Margin="0,0,2,0" />
-                <ui:Button Icon="{ui:SymbolIcon Settings24}" ToolTip="Settings (Ctrl+,)" Click="OnSettingsClick"
+                <ui:Button Icon="{ui:SymbolIcon Settings24}" ToolTip="Settings (Ctrl+,)" AutomationProperties.Name="Settings" Click="OnSettingsClick"
                            Appearance="Transparent" BorderThickness="0" Padding="8,6" Margin="0,0,6,0" />
-                <RadioButton ToolTip="Editor only (Ctrl+1)"
+                <RadioButton ToolTip="Editor only (Ctrl+1)" AutomationProperties.Name="Editor only"
                              IsChecked="{Binding ViewMode, Converter={StaticResource EnumEquals}, ConverterParameter={x:Static vm:ViewMode.Editor}}">
                     <ui:SymbolIcon Symbol="DocumentEdit20" />
                 </RadioButton>
-                <RadioButton ToolTip="Split (Ctrl+2)"
+                <RadioButton ToolTip="Split (Ctrl+2)" AutomationProperties.Name="Split view"
                              IsChecked="{Binding ViewMode, Converter={StaticResource EnumEquals}, ConverterParameter={x:Static vm:ViewMode.Split}}">
                     <ui:SymbolIcon Symbol="SplitVertical20" />
                 </RadioButton>
-                <RadioButton ToolTip="Preview only (Ctrl+3)"
+                <RadioButton ToolTip="Preview only (Ctrl+3)" AutomationProperties.Name="Preview only"
                              IsChecked="{Binding ViewMode, Converter={StaticResource EnumEquals}, ConverterParameter={x:Static vm:ViewMode.Preview}}">
                     <ui:SymbolIcon Symbol="BookOpen20" />
                 </RadioButton>
@@ -160,9 +167,11 @@
         </Grid>
 
         <!-- Tab strip only: the editor and preview below are shared by all tabs. -->
-        <TabControl Grid.Row="2" Margin="8,0,8,0"
+        <TabControl x:Name="TabStrip" Grid.Row="2" Margin="8,0,8,0"
                     ItemsSource="{Binding Documents}"
-                    SelectedItem="{Binding ActiveDocument, Mode=TwoWay}">
+                    SelectedItem="{Binding ActiveDocument, Mode=TwoWay}"
+                    PreviewMouseLeftButtonDown="OnTabStripMouseDown" PreviewMouseMove="OnTabStripMouseMove"
+                    PreviewMouseLeftButtonUp="OnTabStripMouseUp">
             <TabControl.Template>
                 <ControlTemplate TargetType="TabControl">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
@@ -173,6 +182,29 @@
             <TabControl.ItemTemplate>
                 <DataTemplate DataType="{x:Type vm:DocumentViewModel}">
                     <StackPanel Orientation="Horizontal" ToolTip="{Binding FilePath}" Background="Transparent">
+                        <StackPanel.ContextMenu>
+                            <ContextMenu Opened="OnTabMenuOpened">
+                                <MenuItem Header="Close" InputGestureText="Ctrl+W"
+                                          Command="{Binding PlacementTarget.Tag.CloseTabCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding}" />
+                                <MenuItem Header="Close others"
+                                          Command="{Binding PlacementTarget.Tag.CloseOthersCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding}" />
+                                <MenuItem Header="Close to the right"
+                                          Command="{Binding PlacementTarget.Tag.CloseToTheRightCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding}" />
+                                <Separator />
+                                <MenuItem Header="Save all" InputGestureText="Ctrl+Alt+S"
+                                          Command="{Binding PlacementTarget.Tag.SaveAllCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                <Separator />
+                                <MenuItem x:Name="CopyPathItem" Header="Copy path" Click="OnCopyPathClick" />
+                                <MenuItem x:Name="RevealItem" Header="Reveal in File Explorer" Click="OnRevealClick" />
+                            </ContextMenu>
+                        </StackPanel.ContextMenu>
+                        <StackPanel.Tag>
+                            <!-- The context menu lives outside the visual tree; it reaches the window's view model through this. -->
+                            <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Window}" />
+                        </StackPanel.Tag>
                         <StackPanel.InputBindings>
                             <MouseBinding Gesture="MiddleClick"
                                           Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -185,7 +217,7 @@
                         <ui:Button Margin="6,0,-4,0" Padding="4" MinWidth="0" MinHeight="0"
                                    Appearance="Transparent" BorderThickness="0"
                                    Icon="{ui:SymbolIcon Dismiss16}"
-                                   ToolTip="Close (Ctrl+W)"
+                                   ToolTip="Close (Ctrl+W)" AutomationProperties.Name="{Binding DisplayName, StringFormat='Close {0}'}"
                                    Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                    CommandParameter="{Binding}" />
                     </StackPanel>
@@ -332,7 +364,7 @@
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <TextBlock x:Name="WordStatus" Margin="0,0,8,0" />
-                <ui:Button x:Name="LineEndingButton" ToolTip="Line endings" Click="OnStatusMenuClick">
+                <ui:Button x:Name="LineEndingButton" ToolTip="Line endings" AutomationProperties.Name="Line endings" Click="OnStatusMenuClick">
                     <ui:Button.ContextMenu>
                         <ContextMenu>
                             <MenuItem Header="Windows (CRLF)" Command="{Binding ConvertLineEndingsCommand}" CommandParameter="CRLF" />

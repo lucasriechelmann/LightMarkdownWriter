@@ -51,6 +51,11 @@ public static class MarkdownRenderer
         return new RenderResult(html, headings);
     }
 
+    /// <summary>True when the text, parsed on its own, starts with a pipe table. The table formatter checks this so it
+    /// never turns text the preview shows as a paragraph into a table (Markdig is stricter than a regex).</summary>
+    public static bool IsTable(string markdown) =>
+        Markdown.Parse(markdown, Pipeline).FirstOrDefault() is Markdig.Extensions.Tables.Table;
+
     /// <summary>
     /// The 0-based line a block starts on. Markdig's Line is right except for setext headings ("Title" underlined
     /// with ---/===), where it points at the underline; their span starts at the text, so count lines up to it.

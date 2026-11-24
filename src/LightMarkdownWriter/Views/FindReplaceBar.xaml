@@ -42,32 +42,32 @@
 
             <ui:Button x:Name="ExpandButton" Grid.RowSpan="2" Style="{StaticResource BarButton}"
                        VerticalAlignment="Top" Margin="0,4,2,0"
-                       Icon="{ui:SymbolIcon ChevronRight20}" ToolTip="Toggle replace (Ctrl+H)"
+                       Icon="{ui:SymbolIcon ChevronRight20}" ToolTip="Toggle replace (Ctrl+H)" AutomationProperties.Name="Toggle replace"
                        Click="OnExpandClick" />
 
             <StackPanel Grid.Column="1" Orientation="Horizontal">
-                <ui:TextBox x:Name="FindBox" Width="230" PlaceholderText="Find" ClearButtonEnabled="False"
+                <ui:TextBox x:Name="FindBox" Width="230" PlaceholderText="Find" AutomationProperties.Name="Find" ClearButtonEnabled="False"
                             TextChanged="OnQueryChanged" PreviewKeyDown="OnFindBoxKeyDown" />
                 <ToggleButton x:Name="CaseToggle" Style="{StaticResource OptionToggle}" Content="Aa"
-                              ToolTip="Match case (Alt+C)" Click="OnQueryChanged" />
+                              ToolTip="Match case (Alt+C)" AutomationProperties.Name="Match case" Click="OnQueryChanged" />
                 <ToggleButton x:Name="WordToggle" Style="{StaticResource OptionToggle}" Content="ab"
-                              ToolTip="Match whole word (Alt+W)" Click="OnQueryChanged" />
+                              ToolTip="Match whole word (Alt+W)" AutomationProperties.Name="Match whole word" Click="OnQueryChanged" />
                 <ToggleButton x:Name="RegexToggle" Style="{StaticResource OptionToggle}" Content=".*"
-                              ToolTip="Use regular expression (Alt+R)" Click="OnQueryChanged" />
+                              ToolTip="Use regular expression (Alt+R)" AutomationProperties.Name="Use regular expression" Click="OnQueryChanged" />
                 <TextBlock x:Name="MatchInfo" MinWidth="78" Margin="8,0,4,0" VerticalAlignment="Center"
                            TextAlignment="Center" FontSize="12"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="No results" />
                 <ui:Button Style="{StaticResource BarButton}" Icon="{ui:SymbolIcon ArrowUp20}"
-                           ToolTip="Previous match (Shift+F3)" Click="OnPreviousClick" />
+                           ToolTip="Previous match (Shift+F3)" AutomationProperties.Name="Previous match" Click="OnPreviousClick" />
                 <ui:Button Style="{StaticResource BarButton}" Icon="{ui:SymbolIcon ArrowDown20}"
-                           ToolTip="Next match (F3)" Click="OnNextClick" />
+                           ToolTip="Next match (F3)" AutomationProperties.Name="Next match" Click="OnNextClick" />
                 <ui:Button Style="{StaticResource BarButton}" Icon="{ui:SymbolIcon Dismiss20}"
-                           ToolTip="Close (Esc)" Click="OnCloseClick" />
+                           ToolTip="Close (Esc)" AutomationProperties.Name="Close find" Click="OnCloseClick" />
             </StackPanel>
 
             <StackPanel x:Name="ReplaceRow" Grid.Row="1" Grid.Column="1" Orientation="Horizontal"
                         Margin="0,6,0,0" Visibility="Collapsed">
-                <ui:TextBox x:Name="ReplaceBox" Width="230" PlaceholderText="Replace" ClearButtonEnabled="False"
+                <ui:TextBox x:Name="ReplaceBox" Width="230" PlaceholderText="Replace" AutomationProperties.Name="Replace with" ClearButtonEnabled="False"
                             PreviewKeyDown="OnReplaceBoxKeyDown" />
                 <ui:Button Style="{StaticResource BarButton}" Margin="6,0,0,0" Content="Replace"
                            ToolTip="Replace (Enter)" Click="OnReplaceClick" />

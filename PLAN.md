@@ -260,7 +260,7 @@ The gaps you notice in the first hour of use, plus the safety net for the "never
   - A hover button at the top right of each `<pre>` (not front matter, not Mermaid errors). It posts `{type:"copyText", text}` and the app sets the clipboard, so the page needs no clipboard permission and the CSP stays strict. The label changes to "Copied" for 1.5 s.
   - Exports remove `.copy-code` along with `.front-matter`.
   - **Outcome:** checked in the app; the clipboard held the exact code text.
-### Milestone 11: Editing comfort
+### Milestone 11: Editing comfort (done)
 
 - [x] **11.1 Indent and outdent list items** (S, `MarkdownFormatting`)
   - Tab and Shift+Tab on a list line (or on selected list lines) indent or outdent by the list's own indent unit.
@@ -274,37 +274,94 @@ The gaps you notice in the first hour of use, plus the safety net for the "never
     - **Decision:** on a list line, Tab nests the item wherever the caret is (like VS Code and GitHub's editor), so a literal tab can't be typed mid-item. That's rarely wanted in markdown.
     - **Not done:** numbered items keep their number when nested (`2.` under `1.` stays `2.`, and renders as a sub-list starting at 2). Renumbering could be added later.
     - The logic takes a `TextDocument`, not a `TextEditor`, so it's unit-testable without a UI thread; text anchors keep the caret and selection on the same text.
-- [ ] **11.2 Auto-close pairs** (S, `MarkdownFormatting`, Settings toggle)
+- [x] **11.2 Auto-close pairs** (S, `Editing/AutoPairs.cs`, Settings toggle)
   - Typing `(`, `[`, `` ` `` or `"` with text selected wraps the selection. With nothing selected, it inserts the closing character, and typing that character steps over it.
   - It can be turned off in Settings.
   - *Done when:* it behaves like VS Code for these characters, and turning it off restores plain typing.
-- [ ] **11.3 Table formatting** (M, `MarkdownFormatting`)
+  - **Outcome:** checked in the app (a sentence with `( ) [ ] " "` and backticks came out exactly as typed), plus unit tests. Setting: `AppSettings.AutoClosePairs` (on by default), "Close brackets and quotes" in Settings.
+  - **Rules** (VS Code's, adapted):
+    - An opener only auto-closes before whitespace, the end of the line or `;:.,=}])>`` ` ``, so `(` typed in front of a word stays single.
+    - Quotes and backticks don't auto-close after a letter or digit (`it"`, closing a word), or after another backtick, so typing ```` ``` ```` for a fence gives exactly three.
+    - A typed closer steps over the same character when it's next. **Decision:** it steps over any matching closer, not only auto-inserted ones (VS Code tracks which were auto-inserted); simpler, and right in practice.
+    - Backspace between an empty pair deletes both. Box (Alt+drag) selections are left to the editor.
+  - Hooked into AvalonEdit's `TextArea.TextEntering` (setting `Handled` cancels the normal insert); logic on `TextDocument` for tests.
+- [x] **11.3 Table formatting** (M, `Editing/TableFormatter.cs`)
   - A command (Ctrl+Shift+F, or a command-bar button) that pads a pipe table's columns to equal width and keeps the alignment colons.
   - Plus a command that adds a row below the caret.
   - Must count characters correctly for emoji and CJK text (use string info, not `.Length`).
   - *Done when:* the messy tables in the tests come out aligned, and the rendered output is unchanged.
-- [ ] **11.4 Tab management** (M, `MainWindow.xaml`, `MainViewModel`)
+  - **Outcome:** checked in the app and by unit tests, including CJK/emoji widths and "rendered HTML is identical before and after".
+  - **How it works:**
+    - Ctrl+Shift+F or the Table button formats the table at the caret; on a blank line it inserts a 2×2 template instead. Ctrl+Shift+Enter adds an empty row below the caret's row (below the separator from the header) and puts the caret in its first cell. One undo step each.
+    - Widths: one column per text element (`StringInfo`), two for CJK and emoji (`TableFormatter.Width`).
+    - Cells beyond the header's count (GFM ignores them) are kept as they were rather than dropped.
+  - **Markdig, not GitHub, decides what's a table.** Two differences found by the tests:
+    - Markdig doesn't split cells on a pipe inside a `code span` (GitHub does), so the formatter doesn't either.
+    - A row without any pipe turns Markdig's whole block into a paragraph. So the formatter checks `MarkdownRenderer.IsTable` first and leaves such text alone; formatting can never change what the preview shows.
+  - Known gap: an added row is padded, so typing into it pushes its closing pipe out until the next Ctrl+Shift+F.
+- [x] **11.4 Tab management** (M, `MainWindow.xaml`, `MainViewModel`)
   - Reorder tabs by dragging. A tab right-click menu with Close, Close others, Close to the right, Copy path and Reveal in Explorer.
   - Save all (Ctrl+Alt+S).
   - *Done when:* the new order persists in the session, and Close others prompts only for unsaved tabs.
-- [ ] **11.5 Zoom** (S, `MainWindow`, `AppSettings`)
+  - **Outcome:** dragging checked in the app; the commands and session order are unit-tested. The right-click menu itself wasn't checked in the app (the test run was stopped, see the note under 11.6).
+  - **How it works:**
+    - Dragging is plain mouse tracking on the tab strip (`OnTabStripMouseMove` → `MainViewModel.MoveTab`), not OLE drag-and-drop: the window already handles file drops, and nothing needs transferring. A tab swaps only when the mouse passes the middle of its neighbour, so tabs of different widths don't swap back and forth.
+    - Close others / Close to the right (`MainViewModel`) ask only about unsaved tabs; Cancel stops and keeps the rest. Closed tabs go to the Ctrl+Shift+T list. The menu also has Save all; Copy path and Reveal are disabled for untitled tabs.
+    - Save all saves every unsaved tab; untitled ones ask for a name, and cancelling skips just that one.
+  - **Caveat:** on keyboard layouts where AltGr = Ctrl+Alt (Polish, for example), Ctrl+Alt+S takes AltGr+S (ś). Kept as planned; revisit if anyone reports it.
+- [x] **11.5 Zoom** (S, `MainWindow`, `AppSettings`)
   - Ctrl+scroll wheel and Ctrl+= / Ctrl+- / Ctrl+0 change the editor font size, saved to the settings.
   - Ctrl+wheel over the preview keeps WebView2's own zoom.
   - *Done when:* zoom survives a restart and matches the Settings value.
-- [ ] **11.6 Paste images** (M, `MainWindow`, `MarkdownFormatting`)
+  - **Outcome:** checked in the app: Ctrl+= twice wrote `FontSize: 16` to settings.json and showed "Editor zoom 114% (16 pt)" in the command bar; Ctrl+0 went back to 14.
+  - Zoom *is* the Font size setting (one value, so they always match), clamped to 8–40. Numpad +/−/0 work too. The keys are window-level, so they also work while the preview has focus (they zoom the editor; WebView2's own key zoom is off with its accelerator keys).
+- [x] **11.6 Paste images** (M, `MainWindow`, `MarkdownFormatting`)
   - Pasting an image from the clipboard (for example a screenshot) saves it as a PNG next to the document, in an `images/` subfolder with a timestamped name, and inserts the link.
   - For untitled tabs, ask the user to save first.
   - *Done when:* the pasted image appears in the preview, and undo removes the link (the file stays; record that rule here).
+  - **Outcome:** checked in the app: the PNG went to `images/image-20261124-145525.png`, the relative link was inserted and the preview showed it. Undo after a paste wasn't checked in the app (stopped, see below); the link is inserted as one document change, which undo removes.
+  - **Rules:**
+    - **Undo removes the link; the image file stays.** Deleting files on undo could lose a picture used elsewhere.
+    - Text on the clipboard always wins (Word and browsers put text and a picture there together).
+    - Image *files* copied in File Explorer are linked where they are, like dropping them.
+    - The clipboard's "PNG" stream (screenshot tools provide it) is written as is, keeping transparency; otherwise the bitmap is encoded as PNG.
+    - Names: `image-yyyyMMdd-HHmmss.png`, with `-2`, `-3`… when taken (`MarkdownFormatting.PastedImagePath`).
+    - Untitled tab: a dialog offers Save as…; cancelling it cancels the paste.
+  - Hooked in with `CommandManager.AddPreview(CanExecute|Executed)Handler` on the text area, because AvalonEdit's own paste only handles text.
+  - **Testing note (11.2–11.6):** the in-app run sent keystrokes with `keybd_event`, which goes to whatever window is in front. Partway through, the developer switched to a Remote Desktop window and a few keys (Ctrl+Z, Ctrl+S, a right-click, Down, Down, Enter) went there. The run was stopped. See the gotcha in `.claude/knowledge/conventions.md`.
 
-### Milestone 12: Quality and reach
+### Milestone 12: Quality and reach (12.1–12.2 done; 12.3–12.4 are manual tests)
 
-- [ ] **12.1 Accessible names** (S, all XAML)
+- [x] **12.1 Accessible names** (S, all XAML)
   - Set `AutomationProperties.Name` on every icon-only button (Bold, Italic, Find, Settings, view modes, tab close, find-bar buttons).
   - *Done when:* Narrator reads every button, and Accessibility Insights FastPass is clean.
-- [ ] **12.2 Large-file performance** (M, `MainWindow` render pipeline)
+  - **Outcome:** names added to every icon-only button, the view-mode toggles, each tab's close button ("Close notes.md"), the find bar (boxes, toggles, buttons), and the Settings controls whose label is in a separate card header.
+    - The line-ending and update buttons set their name in code with the value included ("Line endings: Unix (LF)"), because a name replaces the visible text for screen readers.
+    - **Guard:** `Milestone12Tests` reads every `.xaml` and fails when a button, toggle or input has neither visible text nor a name. It caught the line-ending button.
+  - **Not done:** the Narrator and Accessibility Insights pass needs a person at the PC; still to do by hand.
+- [x] **12.2 Large-file performance** (M, `MainWindow` render pipeline)
   - Measure a 1 MB and a 5 MB markdown file: time per keystroke and per render.
   - If it's slow: render off the UI thread (Markdig is thread-safe), stretch the debounce for big files, and skip unchanged Mermaid diagrams (already cached).
   - *Done when:* typing in a 1 MB file stays smooth, with the measured numbers recorded here.
+  - **Measured** (Release build, generated markdown mixing headings, prose, lists, code, tables and math; best of 3):
+
+    | Step | 1 MB (58k lines) | 5 MB (288k lines) |
+    |---|---|---|
+    | AvalonEdit: insert a character | 0.005 ms | 0.005 ms |
+    | `Document.Text` snapshot after an edit | 0.8 ms | 3 ms |
+    | `MarkdownRenderer.Render` (preview + outline) | **191 ms** | **930 ms** |
+    | Word count | 29 ms | 48 ms |
+    | Line endings (TextDocument scan / string scan) | 6 / 0.4 ms | 39 / 2 ms |
+    | JSON message to the preview (HTML is 3.8 / 19.4 MB) | 6 ms | 63 ms |
+
+  - **Before:** the render ran on the UI thread after every 150 ms pause, freezing typing for 0.2 s (1 MB) to 0.9 s (5 MB).
+  - **Changes:**
+    - Documents over 100,000 characters render on a background thread from a text snapshot; a result is dropped if the text or tab changed meanwhile (`_renderGeneration`). Smaller ones stay synchronous (≤ ~20 ms), so nothing changes for normal files.
+    - The pause before rendering grows with size: 150 ms, 400 ms from 100k characters, 800 ms from 1M.
+    - Word count and line endings run off the UI thread the same way (`TextStats.DetectLineEnding(string)`).
+  - **After:** per pause the UI thread spends about 2 ms (1 MB) / 10 ms (5 MB) plus the preview message (6 / 63 ms). Typing in 1 MB stays smooth.
+  - **Left:** at 5 MB the 63 ms message serialization is still on the UI thread (once per pause), and the browser takes a while to lay out ~19 MB of HTML in its own process. Not worth more code until someone edits files that big.
+  - Not checked by typing in the running app (UI testing was paused); measured in isolation.
 - [ ] **12.3 Windows 10 and high contrast** (S, manual test)
   - Run the release exe on Windows 10 (a VM is fine) and in a high-contrast theme.
   - Fix anything broken. Windows 10 is supported, as the README says.
@@ -315,19 +372,30 @@ The gaps you notice in the first hour of use, plus the safety net for the "never
 
 ### Milestone 13: Distribution
 
-- [ ] **13.1 Release workflow** (M, `.github/workflows/release.yml`)
+- [~] **13.1 Release workflow** (M, `.github/workflows/release.yml`). Written, **not yet run.**
   - Pushing a `v*` tag runs `dotnet test`, publishes with the `win-x64` profile and generates `SHA256SUMS.txt`.
   - It adds a build attestation (`actions/attest-build-provenance`) and creates the GitHub release with both files.
   - After this, update the release steps in CLAUDE.md.
   - *Done when:* tagging `v1.0.1` produces a release whose exe passes `gh attestation verify`.
+  - **What it does:** on a `v*` tag (windows-latest): checks the tag equals `v<Version>` from the csproj, `dotnet test -c Release`, the portable exe, Inno Setup via Chocolatey and `build-installer.ps1`, `SHA256SUMS.txt` for both exes, provenance attestations for both, then `gh release create … --draft --generate-notes --verify-tag`.
+  - **Decision: the release is a draft.** The developer reviews the notes and publishes it on GitHub; the website's `/releases/latest/download/…` links only follow published releases, so nothing goes public by itself.
+  - The tag name reaches scripts through `env:`, never pasted into the script text.
+  - **To finish:** push the next version tag, check the run, then `gh attestation verify LightMarkdownWriter.exe -R lucasriechelmann/LightMarkdownWriter`. CLAUDE.md lists the workflow first and keeps the manual steps as the fallback until then.
 - [ ] **13.2 Code signing** (M, release workflow; needs an account)
   - Apply to SignPath Foundation (free for open source), or use Azure Trusted Signing (about $10/month; check eligibility).
   - Sign the exe in the release workflow.
   - *Done when:* the released exe has a valid Authenticode signature. SmartScreen reputation still builds up over the first downloads.
-- [ ] **13.3 Update check** (S, new service, Settings)
+- [x] **13.3 Update check** (S, `Services/UpdateService.cs`, Settings)
   - At most once a day, ask the GitHub releases API for the latest tag. If it's newer than the running version, show "Version X available" with a Download button in the command bar.
   - It can be turned off in Settings. No automatic installing.
   - *Done when:* faking an older version shows the prompt, and the check fails silently when offline.
+  - **Outcome:** unit-tested with a fake HTTP handler (newer / same / older tags, once-a-day caching, turned off = no request, offline, HTTP 403 rate limit, drafts, pre-releases, bad JSON). **Not checked in the app** (UI testing paused): run a debug build with `LMW_FAKE_VERSION=1.0.0` to see the button.
+  - **How it works:**
+    - After the window loads, `UpdateService.CheckAsync` calls `GET /repos/lucasriechelmann/LightMarkdownWriter/releases/latest` with a generic `User-Agent: LightMarkdownWriter/<version>` (GitHub requires one) and a 10 s timeout. Nothing else is sent.
+    - The result is cached in settings.json (`LastUpdateCheckUtc`, `LatestReleaseTag`, `LatestReleaseUrl`), so GitHub is asked at most once a day and a known update still shows on later starts. A failed check isn't recorded, so the next start retries.
+    - Versions compare as major.minor.patch (`v1.2.0-beta` → 1.2.0). Drafts and pre-releases are ignored.
+    - The "Version X available" button sits left of the outline button and opens the release page in the browser. Only `https://github.com/…` URLs from the response are used; anything else falls back to the releases page.
+    - Settings → Updates → "Check for updates" (`AppSettings.CheckForUpdates`, on by default). Turning it on checks immediately.
 - [ ] **13.4 winget package** (S, a PR to `microsoft/winget-pkgs`)
   - Submit a manifest so `winget install LightMarkdownWriter` works.
   - Best done after 13.1 and 13.2, so updates are routine and the exe is signed.

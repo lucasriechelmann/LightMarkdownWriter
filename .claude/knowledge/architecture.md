@@ -45,7 +45,7 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 | `DocumentViewModel` (one tab) | `ViewModels/DocumentViewModel.cs` | A `SessionTab` record, plus `backups/{Id:N}.md` when it has unsaved text |
 | `MainViewModel` (tabs, active tab, `ViewMode`) | `ViewModels/MainViewModel.cs` | `session.json` (`Tabs`, `ActiveIndex`, `ViewMode`) |
 | `Session`, `SessionTab`, `WindowPlacement` | `Services/SessionService.cs` | `%LOCALAPPDATA%\LightMarkdownWriter\session.json` |
-| `AppSettings`, `AppTheme` | `Services/SettingsService.cs` | `%LOCALAPPDATA%\LightMarkdownWriter\settings.json`, with enums written as strings |
+| `AppSettings`, `AppTheme` | `Services/SettingsService.cs` | `%LOCALAPPDATA%\LightMarkdownWriter\settings.json`, with enums written as strings. Besides preferences (theme, font, `FontSize` = zoom, word wrap, line numbers, `ShowOutline`, `AutoClosePairs`, `CheckForUpdates`) it caches the last update check: `LastUpdateCheckUtc`, `LatestReleaseTag`, `LatestReleaseUrl` |
 | `ViewMode` (Editor / Split / Preview) | `ViewModels/MainViewModel.cs` | In the session |
 | `AssociationState`, ProgId `LightMarkdownWriter.md` | `Services/FileAssociationService.cs` | `HKCU\Software\Classes`, `HKCU\Software\LightMarkdownWriter\Capabilities`, `RegisteredApplications` |
 | Crash entries (exceptions only, no document text) | `Services/CrashLog.cs` | `%LOCALAPPDATA%\LightMarkdownWriter\crash.log`, rolled over to `crash.old.log` at 1 MB |
@@ -62,9 +62,10 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 ## End-to-end data flow
 
 **Typing → preview**
-1. AvalonEdit's `TextDocument.TextChanged` starts a 150 ms debounce in `MainWindow`.
+1. AvalonEdit's `TextDocument.TextChanged` starts a debounce in `MainWindow`: 150 ms, or 400 ms / 800 ms for documents over 100k / 1M characters (`RenderDelay`).
 2. `MarkdownRenderer.Render` parses the markdown once and returns the HTML plus the headings (`HeadingInfo`: level, plain text, line, and Markdig's auto-identifier `Id`, the same id the HTML carries) for the outline and cross-file heading links. It stamps `data-line` (0-based source line) on every block; setext headings are corrected via their span (`SourceLine`).
    - `MainWindow.RenderPreview` runs when the preview *or* the outline is visible, and only sends HTML to the preview when the preview is shown. `ToHtml` is a thin wrapper used by tests and export code.
+   - **Big documents render off the UI thread** (12.2): over 100,000 characters (`BackgroundWorkThreshold`), the text is snapshotted on the UI thread (`TextDocument` belongs to it) and parsed in `Task.Run`; a stale result is dropped (`_renderGeneration`). The status bar's word count and line-ending scan work the same way (`_statsGeneration`).
    - The pipeline is `UseAdvancedExtensions`, `UseYamlFrontMatter` and `UseEmojiAndSmiley(enableSmileys: false)` (shortcodes only, like GitHub). The advanced extensions already include GitHub alerts (`> [!NOTE]` and the others) and math (`span.math` / `div.math`).
    - Markdig renders front matter as nothing, so `ToHtml` prepends a collapsed `<details class="front-matter">`. `preview.js` removes it from exports.
 3. `PreviewView.ShowHtml` posts `{type:"render", html, baseHref, totalLines, line, edge}` to `Assets/Preview/preview.js`.
@@ -124,7 +125,8 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 - **WebView2 Runtime:** comes with Windows 11. User data goes to `%LOCALAPPDATA%\LightMarkdownWriter\WebView2`. A missing runtime raises `WebView2RuntimeNotFoundException`, and the user sees an error.
 - **Single instance:** a mutex `Local\LightMarkdownWriter-{user}-{session}` plus a pipe `...-open` (`PipeOptions.CurrentUserOnly`). The sender resolves absolute paths and calls `AllowSetForegroundWindow`.
 - **Registry (HKCU only):** written by `FileAssociationService`, followed by `SHChangeNotify(SHCNE_ASSOCCHANGED)`. The Default apps page is opened with `ms-settings:defaultapps?registeredAppUser=LightMarkdownWriter`.
-- **GitHub:** Releases host the exe and `SHA256SUMS.txt`. Pages serves `docs/`. Both are published by hand (see CLAUDE.md).
+- **GitHub:** Releases host the exe, the installer and `SHA256SUMS.txt`; `.github/workflows/release.yml` builds them as a draft release on a `v*` tag (first run still pending, see PLAN 13.1). Pages serves `docs/`.
+- **GitHub API (the app's only network call):** `Services/UpdateService.cs` asks `api.github.com/repos/…/releases/latest` at most once a day, after the window loads, with a generic `User-Agent` and a 10 s timeout. Failures are silent. Off with `AppSettings.CheckForUpdates`. It only shows a button that opens the release page; nothing downloads by itself.
 
 ## Packaging
 

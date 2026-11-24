@@ -4,10 +4,13 @@ Each feature, in user terms, with the code that owns it. Folder-level ownership 
 
 | Feature | What the user gets | Owned by |
 |---|---|---|
-| **Tabs and files** | New, open, save, save as, close (prompts if unsaved), Ctrl+Tab, middle-click close; an unsaved dot on the tab and in the title | `ViewModels/` (entry: `MainViewModel` commands), `Services/DialogService.cs` |
-| **Editor** | AvalonEdit with line numbers and word wrap, Cascadia Mono, accent-coloured links | `MainWindow.xaml` (`Editor`), `MainWindow.xaml.cs` (`ApplyEditorSettings`) |
+| **Tabs and files** | New, open, save, save as, Save all (Ctrl+Alt+S), close (prompts if unsaved), Ctrl+Tab, middle-click close; an unsaved dot on the tab and in the title; drag tabs to reorder; tab right-click menu (Close, Close others, Close to the right, Save all, Copy path, Reveal in File Explorer) | `ViewModels/` (entry: `MainViewModel` commands, `MoveTab`), `Services/DialogService.cs`, `MainWindow.xaml.cs` (tab strip section) |
+| **Editor** | AvalonEdit with line numbers and word wrap, Cascadia Mono, accent-coloured links; zoom with Ctrl+wheel and Ctrl+= / Ctrl+- / Ctrl+0 (it is the Font size setting) | `MainWindow.xaml` (`Editor`), `MainWindow.xaml.cs` (`ApplyEditorSettings`) |
 | **Syntax colours** | Markdown highlighting in a light or dark palette | `Editing/` (`Markdown.xshd`, `MarkdownHighlighting.cs`) |
 | **Formatting and lists** | Ctrl+B / I / E / K, Ctrl+Shift+K, command-bar buttons; Enter continues lists, tasks and quotes; Tab / Shift+Tab nest and un-nest list items | `Editing/MarkdownFormatting.cs`, wired in `MainWindow.SetUpEditing` |
+| **Auto-close pairs** | ( [ ` and " get their closer, wrap a selection, step over closers; Backspace removes an empty pair; switch in Settings | `Editing/AutoPairs.cs` (attached in `MainWindow.SetUpEditing`) |
+| **Tables** | Ctrl+Shift+F or the Table button formats the pipe table at the caret (or inserts one); Ctrl+Shift+Enter adds a row | `Editing/TableFormatter.cs`, `MarkdownRenderer.IsTable` |
+| **Paste images** | Pasting a picture saves `images/image-<time>.png` next to the document and inserts the link; copied image files are linked in place | `MainWindow.xaml.cs` (paste images section), `MarkdownFormatting.PastedImagePath` |
 | **Find and replace** | Ctrl+F / H, F3; match case, whole word and regex (Alt+C / W / R); highlights all matches; replace all as one undo step | `Views/FindReplaceBar.*`, `Editing/SearchResultRenderer.cs` |
 | **Live preview** | GFM, highlight.js, Mermaid, relative images, `.md` links open as tabs, external links open in the browser | `Services/MarkdownRenderer.cs`, `Views/PreviewView.*`, `Assets/Preview/` |
 | **GitHub alerts** | `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` and `[!CAUTION]` styled like GitHub in the preview, exports and clipboard | `MarkdownRenderer` (via `UseAdvancedExtensions`), `preview.css`/`export.css`, `preview.js` (`inlineStyles`) |
@@ -31,7 +34,9 @@ Each feature, in user terms, with the code that owns it. Folder-level ownership 
 | **External changes** | Clean tabs reload silently; tabs with unsaved edits show a banner (Reload / Keep mine / Close tab) | `DocumentViewModel.CheckDisk` / `ReloadFromDisk`, the banner in `MainWindow.xaml` |
 | **Single instance** | A second launch opens its files in the running window | `Services/SingleInstance.cs`, `App.xaml.cs`, `MainWindow.OpenFromOtherInstance` |
 | **Export** | HTML file (Ctrl+Shift+E), PDF (Ctrl+P), copy as HTML (Ctrl+Shift+C); always light; status message with Open | `Services/ExportService.cs`, `preview.js` (export section), `MainWindow.ExportAsync`, `Assets/Preview/export.css` |
-| **Settings** | Theme, font, size, word wrap and line numbers, applied live (Ctrl+,); About | `Services/SettingsService.cs`, `Views/SettingsWindow.*` |
+| **Settings** | Theme, font, size, word wrap, line numbers, close brackets and quotes, check for updates, applied live (Ctrl+,); About |
+| **Update check** | Once a day, a "Version X available" button in the command bar when GitHub has a newer release; opens the download page | `Services/UpdateService.cs`, `MainWindow` (update check section) |
+| **Accessibility** | Every button and input has a name screen readers can read; a test enforces it for all XAML | `AutomationProperties.Name` in the XAML, `tests/.../Milestone12Tests.cs` | `Services/SettingsService.cs`, `Views/SettingsWindow.*` |
 | **File association** | Register or remove "Open with" for `.md` and `.markdown`; open Default apps | `Services/FileAssociationService.cs`, the Files section of `SettingsWindow` |
 | **Keyboard while the preview has focus** | Every app shortcut still works | `MainWindow.OnPreviewKeyDown` |
 | **Packaging and icon** | One portable exe; the "MD" app icon | `Properties/PublishProfiles/win-x64.pubxml`, `Services/PreviewAssets.cs`, `Assets/app.ico` (from `tools/make-icon.ps1`) |

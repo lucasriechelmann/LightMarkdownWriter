@@ -1,0 +1,74 @@
+# Builds a release when a version tag is pushed (git tag -a v1.2.0 && git push origin v1.2.0):
+# tests, the portable exe, the installer, SHA256SUMS.txt, build provenance attestations, and a DRAFT GitHub
+# release with all three files. Review the notes on GitHub, then publish the draft; the website's
+# /releases/latest/download/... links only follow published releases.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write      # create the release
+  id-token: write      # sign the attestation
+  attestations: write  # store the attestation
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.ref_name }}   # via env, never pasted into scripts
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Check the tag matches <Version>
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content src/LightMarkdownWriter/LightMarkdownWriter.csproj)).Project.PropertyGroup.Version |
+                     Where-Object { $_ } | Select-Object -First 1
+          if ("v$version" -ne $env:TAG) { throw "Tag $env:TAG doesn't match <Version>$version</Version> in the csproj." }
+
+      - name: Test
+        run: dotnet test -c Release
+
+      - name: Portable exe (framework-dependent)
+        run: dotnet publish src/LightMarkdownWriter -p:PublishProfile=win-x64
+
+      - name: Install Inno Setup 6
+        run: choco install innosetup --no-progress -y
+
+      - name: Installer (self-contained)
+        shell: pwsh
+        run: ./installer/build-installer.ps1
+
+      - name: SHA256SUMS.txt
+        shell: pwsh
+        run: |
+          $files = 'artifacts/publish/LightMarkdownWriter.exe', 'artifacts/installer/LightMarkdownWriter-Setup.exe'
+          $lines = foreach ($file in $files) {
+            '{0}  {1}' -f (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant(), (Split-Path $file -Leaf)
+          }
+          ($lines -join "`n") + "`n" | Set-Content artifacts/SHA256SUMS.txt -Encoding ascii -NoNewline
+          Get-Content artifacts/SHA256SUMS.txt
+
+      # Lets anyone check the files were built here from this commit: gh attestation verify <file> -R <owner/repo>
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            artifacts/publish/LightMarkdownWriter.exe
+            artifacts/installer/LightMarkdownWriter-Setup.exe
+
+      - name: Draft GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:TAG `
+            artifacts/publish/LightMarkdownWriter.exe `
+            artifacts/installer/LightMarkdownWriter-Setup.exe `
+            artifacts/SHA256SUMS.txt `
+            --title "LightMarkdownWriter $env:TAG" --generate-notes --draft --verify-tag

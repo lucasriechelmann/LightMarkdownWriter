@@ -18,6 +18,24 @@ public static partial class TextStats
 
     public static int CountWords(string text) => Word().Count(TaskMarker().Replace(text, ""));
 
+    /// <summary>The same as <see cref="DetectLineEnding(TextDocument)"/>, on plain text, so it can run off the UI thread.</summary>
+    public static LineEnding DetectLineEnding(string text)
+    {
+        var found = LineEnding.None;
+        for (var i = 0; i < text.Length; i++)
+        {
+            LineEnding delimiter;
+            if (text[i] == '\n') delimiter = LineEnding.Lf;
+            else if (text[i] != '\r') continue;
+            else if (i + 1 < text.Length && text[i + 1] == '\n') { delimiter = LineEnding.CrLf; i++; }
+            else delimiter = LineEnding.Cr;
+
+            if (found == LineEnding.None) found = delimiter;
+            else if (found != delimiter) return LineEnding.Mixed;
+        }
+        return found;
+    }
+
     public static LineEnding DetectLineEnding(TextDocument document)
     {
         var found = LineEnding.None;
