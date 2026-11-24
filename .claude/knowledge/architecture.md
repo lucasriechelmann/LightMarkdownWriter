@@ -34,7 +34,7 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 1. **Single instance.** `SingleInstance.TryBecomePrimary()` (a named mutex). If another instance is running, the files are sent to it with `SendToPrimary` and this process exits.
 2. **Settings and theme.** `SettingsService.Load()` gives `AppSettings`. The theme is applied before the first frame, using the `--theme=` argument if given, otherwise the setting.
 3. **Session.** `SessionService.Load()` gives a `Session`.
-4. **View model.** `new MainViewModel(new DialogService(), files, sessionService, session)` restores tabs, opens the files from the command line, then runs `CheckExternalChanges()`.
+4. **View model.** `new MainViewModel(new DialogService(), files, sessionService, session, recentFiles)` restores tabs, opens the files from the command line, then runs `CheckExternalChanges()`. Before that, `RecentFilesService` is created and its `Changed` event wired to `TaskbarJumpList.Update`.
 5. **Window.** `new MainWindow(viewModel, settings, themeOverride, session)` is shown. Then `SingleInstance.Listen(...)` forwards paths from later launches to `MainWindow.OpenFromOtherInstance`.
 
 ## Data entities
@@ -49,6 +49,9 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 | `AssociationState`, ProgId `LightMarkdownWriter.md` | `Services/FileAssociationService.cs` | `HKCU\Software\Classes`, `HKCU\Software\LightMarkdownWriter\Capabilities`, `RegisteredApplications` |
 | Crash entries (exceptions only, no document text) | `Services/CrashLog.cs` | `%LOCALAPPDATA%\LightMarkdownWriter\crash.log`, rolled over to `crash.old.log` at 1 MB |
 | `LineEnding`, word counts | `Editing/TextStats.cs` | Not stored; computed for the status bar |
+| Recent files (up to 15, newest first) | `Services/RecentFilesService.cs` | `%LOCALAPPDATA%\LightMarkdownWriter\recent.json`, and mirrored to the taskbar jump list by `Services/TaskbarJumpList.cs` |
+| Closed tabs (up to 20, for Ctrl+Shift+T) | `MainViewModel` (`_closedTabs`: a `SessionTab` plus discarded text) | Memory only, for the current run |
+| `HeadingInfo`, `RenderResult` | `Services/MarkdownRenderer.cs` | Not stored; computed for the outline on every render |
 
 **Key invariants:**
 - **The "unsaved" flag is the undo stack's.** `DocumentViewModel.IsDirty` mirrors `!Document.UndoStack.IsOriginalFile`. A tab restored from a backup calls `DiscardOriginalFileMarker()` so it counts as unsaved.
@@ -59,7 +62,8 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 
 **Typing → preview**
 1. AvalonEdit's `TextDocument.TextChanged` starts a 150 ms debounce in `MainWindow`.
-2. `MarkdownRenderer.ToHtml` parses the markdown and stamps `data-line` (0-based source line) on every block.
+2. `MarkdownRenderer.Render` parses the markdown once and returns the HTML plus the headings (`HeadingInfo`: level, plain text, line) for the outline. It stamps `data-line` (0-based source line) on every block; setext headings are corrected via their span (`SourceLine`).
+   - `MainWindow.RenderPreview` runs when the preview *or* the outline is visible, and only sends HTML to the preview when the preview is shown. `ToHtml` is a thin wrapper used by tests and export code.
    - The pipeline is `UseAdvancedExtensions` plus `UseYamlFrontMatter`. The advanced extensions already include GitHub alerts (`> [!NOTE]` and the others).
    - Markdig renders front matter as nothing, so `ToHtml` prepends a collapsed `<details class="front-matter">`. `preview.js` removes it from exports.
 3. `PreviewView.ShowHtml` posts `{type:"render", html, baseHref, totalLines, line, edge}` to `Assets/Preview/preview.js`.
@@ -90,6 +94,10 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 **Status bar:** `MainWindow` code-behind updates the caret position instantly, and the word count and line-ending label after a 300 ms debounce (`TextStats`).
 - The encoding label is bound to `DocumentViewModel.EncodingLabel`.
 - Conversions are `MainViewModel.ConvertLineEndingsCommand` and `SetEncodingCommand`, run from the status-bar context menus.
+
+**Jumping to a line** (`MainWindow.NavigateToLine`), shared by the outline (heading at the top) and Go to line (line centred):
+- It sets the caret and scrolls the editor; in split view, scroll sync then moves the preview.
+- When the editor isn't visible, or for outline jumps, it also calls `Preview.SyncToLine` directly.
 
 **Navigation:** only `index.html` may load in the preview.
 - `.md` links open as tabs through `MarkdownFileLinkClicked`.

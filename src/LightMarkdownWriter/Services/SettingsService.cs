@@ -26,6 +26,10 @@ public partial class AppSettings : ObservableObject
     [ObservableProperty]
     private bool _showLineNumbers = true;
 
+    /// <summary>The heading outline panel (Ctrl+Shift+O).</summary>
+    [ObservableProperty]
+    private bool _showOutline;
+
     /// <summary>For the theme ComboBox (System / Light / Dark).</summary>
     [JsonIgnore]
     public int ThemeIndex

@@ -36,6 +36,16 @@ public static partial class TextStats
         return found;
     }
 
+    /// <summary>Parses the Go to line box: "42", "42:7" or "42,7" (line, then optional column; 1-based).</summary>
+    public static bool TryParseLineColumn(string? text, out int line, out int column)
+    {
+        line = column = 1;
+        var parts = (text ?? "").Trim().Split([':', ','], StringSplitOptions.TrimEntries);
+        if (parts.Length is 0 or > 2 || !int.TryParse(parts[0], out line) || line < 1) return false;
+        if (parts.Length == 2 && (!int.TryParse(parts[1], out column) || column < 1)) return false;
+        return true;
+    }
+
     public static string Label(LineEnding ending) => ending switch
     {
         LineEnding.CrLf => "Windows (CRLF)",

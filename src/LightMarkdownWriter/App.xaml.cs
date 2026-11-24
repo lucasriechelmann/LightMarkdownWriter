@@ -56,7 +56,11 @@ public partial class App : Application
 
         var sessionService = new SessionService();
         var session = sessionService.Load();
-        var viewModel = new MainViewModel(new DialogService(), files, sessionService, session);
+        var recentFiles = new RecentFilesService();
+        recentFiles.Changed += (_, _) => TaskbarJumpList.Update(recentFiles.Existing);
+        TaskbarJumpList.Update(recentFiles.Existing);
+
+        var viewModel = new MainViewModel(new DialogService(), files, sessionService, session, recentFiles);
         var window = new MainWindow(viewModel, settings, themeOverride, session);
         MainWindow = _window = window;
         window.Show();

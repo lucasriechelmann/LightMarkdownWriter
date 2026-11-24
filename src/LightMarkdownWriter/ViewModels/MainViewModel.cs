@@ -44,10 +44,12 @@ public partial class MainViewModel : ObservableObject
         : $"{(ActiveDocument.IsDirty ? "• " : "")}{ActiveDocument.DisplayName} - {AppName}";
 
     public MainViewModel(IDialogService dialogs, IEnumerable<string> startupFiles,
-                         SessionService? sessionService = null, Session? session = null)
+                         SessionService? sessionService = null, Session? session = null,
+                         RecentFilesService? recentFiles = null)
     {
         _dialogs = dialogs;
         _sessionService = sessionService;
+        RecentFiles = recentFiles;
         if (session is not null) RestoreSession(session);
 
         foreach (var path in startupFiles)
@@ -137,6 +139,73 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void KeepMyVersion() => ActiveDocument?.IgnoreExternalChange();
 
+    // ---------- Recent files (9.1) ----------
+
+    public RecentFilesService? RecentFiles { get; }
+
+    [RelayCommand]
+    private void OpenRecent(string path)
+    {
+        if (!File.Exists(path))
+        {
+            RecentFiles?.Remove(path);
+            _dialogs.ShowError($"{path}\n\nThis file no longer exists, so it was removed from the recent list.");
+            return;
+        }
+        OpenPath(path);
+    }
+
+    [RelayCommand]
+    private void ClearRecent() => RecentFiles?.Clear();
+
+    // ---------- Reopen closed tab (9.2) ----------
+
+    private const int MaxClosedTabs = 20;
+
+    // Same snapshot format as the session: the tab, plus its text if unsaved edits were discarded on close.
+    private readonly List<(SessionTab Tab, string? UnsavedText)> _closedTabs = [];
+
+    public bool CanReopenClosedTab => _closedTabs.Count > 0;
+
+    private void RememberClosed(DocumentViewModel doc)
+    {
+        if (doc.IsPristineUntitled) return; // nothing worth bringing back
+        _closedTabs.Add((doc.ToSessionTab(hasBackup: doc.IsDirty), doc.IsDirty ? doc.Document.Text : null));
+        if (_closedTabs.Count > MaxClosedTabs) _closedTabs.RemoveAt(0);
+        OnPropertyChanged(nameof(CanReopenClosedTab));
+    }
+
+    /// <summary>Ctrl+Shift+T: brings back the most recently closed tab, unsaved text included.</summary>
+    [RelayCommand]
+    private void ReopenClosedTab()
+    {
+        while (_closedTabs.Count > 0)
+        {
+            var (tab, text) = _closedTabs[^1];
+            _closedTabs.RemoveAt(_closedTabs.Count - 1);
+            OnPropertyChanged(nameof(CanReopenClosedTab));
+
+            var open = tab.FilePath is null ? null : Documents.FirstOrDefault(d =>
+                string.Equals(d.FilePath, tab.FilePath, StringComparison.OrdinalIgnoreCase));
+            if (open is not null)
+            {
+                ActiveDocument = open;
+                return;
+            }
+
+            // A fresh Id: the closed tab's backup (if any) is gone, and ids must stay unique.
+            if (DocumentViewModel.Restore(tab with { Id = Guid.NewGuid() }, text) is not { } doc)
+                continue; // file deleted and nothing unsaved to restore: try the one before it
+
+            if (Documents.Count == 1 && Documents[0].IsPristineUntitled)
+                Documents[0] = doc;
+            else
+                Documents.Add(doc);
+            ActiveDocument = doc;
+            return;
+        }
+    }
+
     // ---------- Status bar: encoding and line endings ----------
 
     /// <summary>"utf-8" or "utf-8-bom".</summary>
@@ -207,6 +276,7 @@ public partial class MainViewModel : ObservableObject
         else
             Documents.Add(doc);
         ActiveDocument = doc;
+        RecentFiles?.Add(fullPath);
     }
 
     [RelayCommand]
@@ -230,6 +300,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             doc.SaveTo(path);
+            RecentFiles?.Add(path);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -245,6 +316,7 @@ public partial class MainViewModel : ObservableObject
         doc ??= ActiveDocument;
         if (doc is null || !await ConfirmDiscardAsync(doc)) return;
 
+        RememberClosed(doc);
         var index = Documents.IndexOf(doc);
         Documents.Remove(doc);
         if (Documents.Count == 0)

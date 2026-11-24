@@ -207,22 +207,32 @@ The gaps you notice in the first hour of use, plus the safety net for the "never
   - **Outcome:** `UseAdvancedExtensions` already includes alerts, with GitHub's own HTML and icons. Checked in the preview (dark), in an HTML export, and on the clipboard (inline borders and title colours in GitHub's palette).
   - **Fix needed:** Markdig's icon SVGs lack GitHub's `.octicon` class, so they rendered black. A `fill: currentColor` rule was added in `preview.css` and `export.css`.
 
-### Milestone 9: Finding your way around
+### Milestone 9: Finding your way around (done)
 
-- [ ] **9.1 Recent files** (M, `SettingsService` or a new `RecentFilesService`, command bar)
+- [x] **9.1 Recent files** (M, `SettingsService` or a new `RecentFilesService`, command bar)
   - Keep the last 15 opened files, most recent first, and drop missing ones when shown.
   - Show them in an Open drop-down, and in the Windows jump list on the taskbar (`JumpList`).
   - *Done when:* the list survives restarts, and picking a file opens it (or switches to it if it's already open).
-- [ ] **9.2 Reopen closed tab** (S, `MainViewModel`)
+- [x] **9.2 Reopen closed tab** (S, `MainViewModel`)
   - Ctrl+Shift+T reopens the last closed tabs in order, including unsaved text discarded at close (held in memory for the session).
   - *Done when:* closing three tabs and pressing Ctrl+Shift+T three times brings them back in reverse order.
-- [ ] **9.3 Go to line** (S, `MainWindow`)
+- [x] **9.3 Go to line** (S, `MainWindow`)
   - Ctrl+G opens a small line-number box in the command bar (not over the preview), then jumps there and centres the line.
   - *Done when:* it works from the editor and from the preview.
-- [ ] **9.4 Heading outline** (M, new view, `MarkdownRenderer`)
+- [x] **9.4 Heading outline** (M, new view, `MarkdownRenderer`)
   - A toggleable panel listing the document's headings, built from the Markdig syntax tree.
   - Clicking a heading scrolls both panes, reusing the scroll-sync lines.
   - *Done when:* the outline updates as you type and clicking a heading lands on it in both panes.
+  - **Outcomes** (all checked in the running app, with 15 new unit tests):
+    - **9.1** `Services/RecentFilesService.cs` keeps 15 files in `recent.json`, newest first, matched case-insensitively. Missing files are kept but hidden.
+      - Files are recorded on open and on save. The History button next to Open builds its menu on each click (recent files, Reopen closed tab, Clear).
+      - `Services/TaskbarJumpList.cs` fills a "Recent" jump-list category; each entry launches the exe with the file, and single instance turns that into a tab.
+    - **9.2** Closed tabs are kept in memory (up to 20) in the session's snapshot format (`SessionTab` plus text), so a tab closed with "Don't save" comes back with the discarded text as unsaved. Empty untitled tabs aren't kept.
+    - **9.3** Ctrl+G opens a box in the command bar. It accepts `line`, `line:col` or `line,col` (`TextStats.TryParseLineColumn`) and centres the line. In preview-only view it scrolls the preview.
+    - **9.4** `MarkdownRenderer.Render` returns the HTML and the headings from a single parse, as plain text without markdown syntax.
+      - The outline is a panel left of the editor, toggled with Ctrl+Shift+O or its button; the choice is saved as `AppSettings.ShowOutline`. It also updates in editor-only mode.
+      - Clicking a heading, or pressing Enter, puts it at the top of both panes. The section containing the caret is highlighted.
+    - **Bug fixed along the way:** for setext headings (text underlined with `---`/`===`), Markdig's `Line` points at the underline. `MarkdownRenderer.SourceLine` now uses the block's span, which also corrects their `data-line` scroll anchors.
 
 ### Milestone 10: Markdown and preview extras
 

@@ -93,7 +93,11 @@ public partial class MainWindow : FluentWindow
             _statsTimer.Stop();
             UpdateDocumentStats();
         };
-        Editor.TextArea.Caret.PositionChanged += (_, _) => UpdateCaretStatus();
+        Editor.TextArea.Caret.PositionChanged += (_, _) =>
+        {
+            UpdateCaretStatus();
+            SelectCurrentHeading();
+        };
         Editor.TextArea.SelectionChanged += (_, _) =>
         {
             UpdateCaretStatus();
@@ -111,6 +115,59 @@ public partial class MainWindow : FluentWindow
         AllowDrop = true;
         PreviewDragOver += OnFileDragOver;
         PreviewDrop += OnFileDrop;
+    }
+
+    // ---------- Recent files menu (9.1, 9.2) ----------
+
+    /// <summary>Built on each open so it lists only files that still exist, newest first.</summary>
+    private void OnRecentClick(object sender, RoutedEventArgs e)
+    {
+        var menu = RecentButton.ContextMenu!;
+        menu.Items.Clear();
+
+        var recent = _viewModel.RecentFiles?.Existing ?? [];
+        if (recent.Count == 0)
+            menu.Items.Add(new System.Windows.Controls.MenuItem { Header = "No recent files", IsEnabled = false });
+
+        foreach (var path in recent)
+        {
+            menu.Items.Add(new System.Windows.Controls.MenuItem
+            {
+                // Underscores would become access keys in a menu header, so escape them.
+                Header = Path.GetFileName(path).Replace("_", "__"),
+                ToolTip = path,
+                InputGestureText = ShortenFolder(Path.GetDirectoryName(path)),
+                Command = _viewModel.OpenRecentCommand,
+                CommandParameter = path,
+            });
+        }
+
+        menu.Items.Add(new System.Windows.Controls.Separator());
+        menu.Items.Add(new System.Windows.Controls.MenuItem
+        {
+            Header = "Reopen closed tab",
+            InputGestureText = "Ctrl+Shift+T",
+            Command = _viewModel.ReopenClosedTabCommand,
+            IsEnabled = _viewModel.CanReopenClosedTab,
+        });
+        menu.Items.Add(new System.Windows.Controls.MenuItem
+        {
+            Header = "Clear recent files",
+            Command = _viewModel.ClearRecentCommand,
+            IsEnabled = recent.Count > 0,
+        });
+
+        menu.PlacementTarget = RecentButton;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    /// <summary>"C:\Users\me\Documents\notes" → "…\Documents\notes" (the last two folders).</summary>
+    private static string ShortenFolder(string? folder)
+    {
+        if (string.IsNullOrEmpty(folder)) return "";
+        var parts = folder.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length <= 3 ? folder : "…\\" + string.Join('\\', parts[^2..]);
     }
 
     // ---------- Status bar ----------
@@ -211,6 +268,10 @@ public partial class MainWindow : FluentWindow
         {
             _themeOverride = null; // an explicit choice in Settings replaces --theme
             ApplyThemeSetting();
+        }
+        else if (e.PropertyName == nameof(AppSettings.ShowOutline))
+        {
+            ApplyOutlineVisibility();
         }
         else
         {
@@ -344,6 +405,8 @@ public partial class MainWindow : FluentWindow
         AddKeyBinding(InputBindings, Key.P, ModifierKeys.Control, () => _ = ExportAsync(ExportKind.Pdf));
         AddKeyBinding(InputBindings, Key.C, ModifierKeys.Control | ModifierKeys.Shift, () => _ = ExportAsync(ExportKind.Clipboard));
         AddKeyBinding(InputBindings, Key.OemComma, ModifierKeys.Control, OpenSettings);
+        AddKeyBinding(InputBindings, Key.G, ModifierKeys.Control, OpenGoToLine);
+        AddKeyBinding(InputBindings, Key.O, ModifierKeys.Control | ModifierKeys.Shift, ToggleOutline);
 #if DEBUG
         // Debug builds only: throw on purpose to exercise the crash safety net in App.
         AddKeyBinding(InputBindings, Key.F12, ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift,
@@ -448,6 +511,7 @@ public partial class MainWindow : FluentWindow
         WatchDocument(_viewModel.ActiveDocument);
         ApplyViewMode(_viewModel.ViewMode);
         RestoreEditorPosition(_viewModel.ActiveDocument);
+        ApplyOutlineVisibility();
 
         try
         {
@@ -733,15 +797,129 @@ public partial class MainWindow : FluentWindow
             RenderPreview();
     }
 
+    /// <summary>One parse feeds both the preview and the outline; skipped when neither is visible.</summary>
     private void RenderPreview(bool force = false)
     {
         _renderTimer.Stop();
-        if ((_appliedMode == ViewMode.Editor && !force) || _watchedDocument is not { } doc) return;
+        var previewVisible = _appliedMode != ViewMode.Editor || force;
+        if (_watchedDocument is not { } doc || (!previewVisible && !_settings.ShowOutline)) return;
 
-        var html = MarkdownRenderer.ToHtml(doc.Document.Text);
+        var result = MarkdownRenderer.Render(doc.Document.Text);
+        if (_settings.ShowOutline) UpdateOutline(result.Headings);
+        if (!previewVisible) return;
+
         var folder = doc.FilePath is null ? null : Path.GetDirectoryName(doc.FilePath);
-        Preview.ShowHtml(html, folder, doc.Document.LineCount);
+        Preview.ShowHtml(result.Html, folder, doc.Document.LineCount);
     }
+
+    // ---------- Outline (9.4) and Go to line (9.3) ----------
+
+    // Navigation happens on click/Enter (not SelectionChanged), so the code can move the selection freely.
+    private IReadOnlyList<HeadingInfo> _headings = [];
+
+    private void ApplyOutlineVisibility()
+    {
+        var show = _settings.ShowOutline;
+        OutlineCard.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        OutlineButton.Appearance = show ? ControlAppearance.Secondary : ControlAppearance.Transparent;
+        if (show) RenderPreview(); // fill it now, even in editor-only mode
+    }
+
+    private void ToggleOutline() => _settings.ShowOutline = !_settings.ShowOutline;
+
+    private void OnOutlineToggleClick(object sender, RoutedEventArgs e) => ToggleOutline();
+
+    private void UpdateOutline(IReadOnlyList<HeadingInfo> headings)
+    {
+        _headings = headings;
+        OutlineList.ItemsSource = headings;
+        OutlineEmpty.Visibility = headings.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        SelectCurrentHeading();
+    }
+
+    /// <summary>Highlights the section the caret is in, like VS Code's outline.</summary>
+    private void SelectCurrentHeading()
+    {
+        if (!_settings.ShowOutline || _headings.Count == 0) return;
+        var caretLine = Editor.TextArea.Caret.Line - 1; // headings use 0-based lines
+        var current = _headings.LastOrDefault(h => h.Line <= caretLine);
+        if (ReferenceEquals(OutlineList.SelectedItem, current)) return;
+        OutlineList.SelectedItem = current;
+        if (current is not null) OutlineList.ScrollIntoView(current);
+    }
+
+    private void OnOutlineClick(object sender, MouseButtonEventArgs e)
+    {
+        if ((e.OriginalSource as FrameworkElement)?.DataContext is HeadingInfo heading)
+            NavigateToLine(heading.Line + 1, 1, alignTop: true);
+    }
+
+    private void OnOutlineKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || OutlineList.SelectedItem is not HeadingInfo heading) return;
+        NavigateToLine(heading.Line + 1, 1, alignTop: true);
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Puts the caret on a line and scrolls both panes there: the heading at the top for the outline,
+    /// the line centred for Go to line. In split view the preview follows the editor through scroll sync;
+    /// in preview-only view it's scrolled directly.
+    /// </summary>
+    private void NavigateToLine(int line, int column, bool alignTop)
+    {
+        if (Editor.Document is not { } document) return;
+        line = Math.Clamp(line, 1, document.LineCount);
+        var target = document.GetLineByNumber(line);
+        Editor.CaretOffset = target.Offset + Math.Clamp(column - 1, 0, target.Length);
+
+        var view = Editor.TextArea.TextView;
+        var top = view.GetVisualTopByDocumentLine(line);
+        Editor.ScrollToVerticalOffset(Math.Max(0, alignTop ? top : top - view.ActualHeight / 2));
+
+        if (alignTop || _appliedMode == ViewMode.Preview)
+            Preview.SyncToLine(line - 1, line == 1 ? "top" : null);
+        if (EditorCard.Visibility == Visibility.Visible)
+            Dispatcher.BeginInvoke(() => Editor.Focus(), DispatcherPriority.Input);
+    }
+
+    private void OpenGoToLine()
+    {
+        if (Editor.Document is not { } document) return;
+        StatusPanel.Visibility = Visibility.Collapsed;
+        GoToPanel.Visibility = Visibility.Visible;
+        GoToBox.PlaceholderText = $"Go to line (1–{document.LineCount:N0}) or line:column";
+        GoToBox.Text = "";
+        Dispatcher.BeginInvoke(() => GoToBox.Focus(), DispatcherPriority.Input);
+    }
+
+    private void CloseGoToLine(bool focusEditor)
+    {
+        if (GoToPanel.Visibility != Visibility.Visible) return;
+        GoToPanel.Visibility = Visibility.Collapsed;
+        if (focusEditor && EditorCard.Visibility == Visibility.Visible) Editor.Focus();
+    }
+
+    private void OnGoToKeyDown(object sender, KeyEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case Key.Escape:
+                CloseGoToLine(focusEditor: true);
+                e.Handled = true;
+                break;
+            case Key.Enter:
+                if (TextStats.TryParseLineColumn(GoToBox.Text, out var line, out var column))
+                {
+                    CloseGoToLine(focusEditor: false);
+                    NavigateToLine(line, column, alignTop: false);
+                }
+                e.Handled = true; // invalid input: stay open so it can be corrected
+                break;
+        }
+    }
+
+    private void OnGoToLostFocus(object sender, KeyboardFocusChangedEventArgs e) => CloseGoToLine(focusEditor: false);
 
     private void ApplyViewMode(ViewMode mode)
     {

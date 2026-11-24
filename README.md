@@ -16,6 +16,7 @@ A light, fast markdown editor for Windows 11 with a live, GitHub-style preview.
   - everything bundled, so it works offline
 - **Two-way scroll sync** between editor and preview. It follows source lines, so tall images and diagrams don't make the panes drift apart.
 - **Split, editor-only or preview-only** views.
+- **Find your way around:** a heading outline (Ctrl+Shift+O), go to line (Ctrl+G), recent files (also in the taskbar jump list), and Ctrl+Shift+T to reopen closed tabs.
 - **Tabs that survive restarts.** Closing never asks to save: every tab, its unsaved text, caret and scroll position come back next time.
 - **Edits from other programs are detected.** A clean tab reloads in place; a tab with unsaved edits asks you what to do.
 - **Editing helpers:**
@@ -48,9 +49,10 @@ There are two downloads on each [release](https://github.com/lucasriechelmann/Li
 | Action | Shortcut |
 |---|---|
 | New / Open / Save / Save as | Ctrl+N / Ctrl+O / Ctrl+S / Ctrl+Shift+S |
-| Close tab | Ctrl+W or middle-click the tab |
+| Close tab / reopen closed tab | Ctrl+W or middle-click the tab / Ctrl+Shift+T |
 | Next / previous tab | Ctrl+Tab / Ctrl+Shift+Tab |
 | Editor / Split / Preview | Ctrl+1 / Ctrl+2 / Ctrl+3 |
+| Go to line / outline | Ctrl+G / Ctrl+Shift+O |
 | Bold / Italic / Inline code | Ctrl+B / Ctrl+I / Ctrl+E |
 | Link / Code block | Ctrl+K / Ctrl+Shift+K |
 | Find / Replace | Ctrl+F / Ctrl+H |
@@ -102,6 +104,7 @@ Everything lives in `%LOCALAPPDATA%\LightMarkdownWriter\`:
 | `session.json` | Open tabs, caret/scroll positions, window placement, view mode |
 | `backups\` | Unsaved text of open tabs; removed once a tab is saved or closed |
 | `WebView2\` | The preview's browser cache |
+| `recent.json` | Your recent files |
 | `crash.log` | Details of unexpected errors, if any happened (no document text) |
 
 To reset the app, delete the folder while the app is closed.

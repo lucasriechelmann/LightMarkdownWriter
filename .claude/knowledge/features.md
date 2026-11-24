@@ -14,6 +14,10 @@ Each feature, in user terms, with the code that owns it. Folder-level ownership 
 | **YAML front matter** | A leading `---` block shows as a collapsed "Front matter" box, is left out of exports, and its keys are coloured in the editor | `MarkdownRenderer.FrontMatterHtml`, `Editing/FrontMatterColorizer.cs`, `preview.css` |
 | **Status bar** | Line and column (selection size), word count (of the selection), line endings and encoding; click to convert | `MainWindow.xaml` (status bar), `MainWindow.xaml.cs` (status bar section), `Editing/TextStats.cs`, `MainViewModel` (conversion commands) |
 | **Drag and drop** | Drop `.md`/`.txt` files to open them; drop images to insert links | `MainWindow.xaml.cs` (drag-and-drop section), `MarkdownFormatting.ImageLink` |
+| **Recent files** | History button next to Open (recent files, Reopen closed tab, Clear); a "Recent" category in the taskbar jump list | `Services/RecentFilesService.cs`, `Services/TaskbarJumpList.cs`, `MainViewModel` (`OpenRecent`, `ClearRecent`), `MainWindow.OnRecentClick` |
+| **Reopen closed tab** | Ctrl+Shift+T brings tabs back in reverse order, including text discarded with "Don't save" | `MainViewModel` (`RememberClosed`, `ReopenClosedTab`) |
+| **Go to line** | Ctrl+G: `line` or `line:col` in a command-bar box | `MainWindow.xaml.cs` (outline and go-to section), `TextStats.TryParseLineColumn` |
+| **Heading outline** | Ctrl+Shift+O panel left of the editor; click a heading to jump both panes; highlights the current section | `MainWindow.xaml` (`OutlineCard`), `MainWindow.xaml.cs` (outline section), `MarkdownRenderer.Render`, `Converters/HeadingIndentConverter.cs` |
 | **Crash safety net** | Unexpected errors save everything, show a message and keep the app running; details go to `crash.log` | `App.xaml.cs` (crash safety net), `Services/CrashLog.cs`, `MainWindow.PersistSessionNow` |
 | **View modes** | Editor, Split or Preview (Ctrl+1 / 2 / 3); the splitter position is remembered | `MainViewModel.ViewMode`, `MainWindow.ApplyViewMode` |
 | **Scroll sync** | The editor and preview follow each other by source line | `MainWindow.xaml.cs` (scroll sync section), `Assets/Preview/preview.js` |
