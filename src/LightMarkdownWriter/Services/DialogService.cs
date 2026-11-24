@@ -9,6 +9,7 @@ public interface IDialogService
 {
     string[] ShowOpenDialog();
     string? ShowSaveDialog(string suggestedFileName);
+    string? ShowExportDialog(string suggestedFileName, string filter, string defaultExt, string? initialDirectory);
     Task<SaveChoice> AskSaveChangesAsync(string documentName);
     void ShowError(string message);
 }
@@ -32,6 +33,19 @@ public sealed class DialogService : IDialogService
             FileName = suggestedFileName,
             DefaultExt = ".md",
             AddExtension = true,
+        };
+        return dialog.ShowDialog(Application.Current.MainWindow) == true ? dialog.FileName : null;
+    }
+
+    public string? ShowExportDialog(string suggestedFileName, string filter, string defaultExt, string? initialDirectory)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Filter = filter,
+            FileName = suggestedFileName,
+            DefaultExt = defaultExt,
+            AddExtension = true,
+            InitialDirectory = initialDirectory ?? "",
         };
         return dialog.ShowDialog(Application.Current.MainWindow) == true ? dialog.FileName : null;
     }

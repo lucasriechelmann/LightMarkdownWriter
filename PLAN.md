@@ -89,9 +89,19 @@ LightMarkdownWriter/
   - It calls `AllowSetForegroundWindow` so the running window may come to the front.
 
 ### Export
-- **HTML**: a standalone file with inlined CSS. Mermaid is pre-rendered to SVG (taken from the live DOM), so the file needs no JS.
-- **PDF**: `CoreWebView2.PrintToPdfAsync` with print CSS (light theme forced).
-- **Copy as HTML**: the clipboard gets CF_HTML with header offsets plus plain-text fallback, and pastes cleanly into Outlook, Teams and Word.
+- Exports are always in the **light theme**. The command bar has an Export menu, with shortcuts Ctrl+Shift+E (HTML), Ctrl+P (PDF) and Ctrl+Shift+C (Copy as HTML).
+- The preview page builds the export from a copy of its rendered DOM. Mermaid is re-rendered in light colours with `htmlLabels: false` (pure SVG text), and internal `data-*` attributes are stripped.
+- **HTML**: a standalone file with no scripts.
+  - The `github-markdown-light.css`, `hljs-github` and `export.css` styles are inlined.
+  - Mermaid diagrams are inline SVG, and local images are embedded as data URIs (up to 20 MB each).
+  - The title comes from the first `<h1>`.
+- **PDF**: a hidden `CoreWebView2Controller` with scripts disabled loads the standalone HTML and calls `PrintToPdfAsync`.
+  - Page size is A4 in metric regions, Letter otherwise. Margins are 0.6 in.
+  - Print CSS wraps long code lines and avoids breaking inside blocks.
+- **Copy as HTML**: CF_HTML with UTF-8 byte offsets, handed to WPF as a byte stream so it isn't re-encoded, plus the markdown source as plain text.
+  - Styles are inlined per element, because Outlook and Word drop `<style>` blocks.
+  - Diagrams are rasterized to 2× PNG, because Office doesn't render inline SVG.
+- The export result appears in the command bar with an **Open** button, not as a toast: the preview's native window would cover anything drawn on top of it.
 
 ### Theme
 - Follows the Windows light/dark setting and accent color live, through the WPF-UI theme watcher. Settings offer System / Light / Dark.

@@ -1,0 +1,30 @@
+/* Layout for exported HTML/PDF (light theme only; github-markdown-light.css + hljs-github are inlined before this). */
+html { background: #ffffff; }
+body { margin: 0; }
+
+.markdown-body {
+    box-sizing: border-box;
+    min-width: 200px;
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 45px;
+}
+
+@media (max-width: 767px) {
+    .markdown-body { padding: 15px; }
+}
+
+.markdown-body pre code.hljs { padding: 0; background: transparent; }
+/* Markdig puts an <hr> in the footnotes block and GitHub's CSS already draws a border there. */
+.markdown-body .footnotes > hr { display: none; }
+.markdown-body .mermaid { display: flex; justify-content: center; margin-bottom: 16px; }
+.markdown-body .mermaid svg { max-width: 100%; height: auto; }
+
+@media print {
+    .markdown-body { max-width: none; padding: 0; }
+    /* Wrap long code lines instead of cutting them off at the page edge. */
+    .markdown-body pre { white-space: pre-wrap; word-wrap: break-word; }
+    .markdown-body pre, .markdown-body table, .markdown-body img,
+    .markdown-body .mermaid, .markdown-body blockquote { break-inside: avoid; }
+    .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 { break-after: avoid; }
+}

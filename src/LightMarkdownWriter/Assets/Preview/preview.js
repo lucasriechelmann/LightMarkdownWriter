@@ -154,6 +154,126 @@
     content.addEventListener('load', reapplySync, true);
     window.addEventListener('resize', reapplySync);
 
+    // ---------- Export ----------
+    // Works on a copy of the rendered content, always in the light theme (exports are for sharing/printing).
+
+    // github.com light syntax colors (from hljs-github.min.css), for inline styles in clipboard HTML.
+    const hljsLight = {
+        'hljs-keyword': '#d73a49', 'hljs-doctag': '#d73a49', 'hljs-type': '#d73a49', 'hljs-template-tag': '#d73a49',
+        'hljs-template-variable': '#d73a49', 'hljs-title': '#6f42c1', 'hljs-attr': '#005cc5', 'hljs-attribute': '#005cc5',
+        'hljs-literal': '#005cc5', 'hljs-meta': '#005cc5', 'hljs-number': '#005cc5', 'hljs-operator': '#005cc5',
+        'hljs-variable': '#005cc5', 'hljs-selector-attr': '#005cc5', 'hljs-selector-class': '#005cc5',
+        'hljs-selector-id': '#005cc5', 'hljs-section': '#005cc5', 'hljs-string': '#032f62', 'hljs-regexp': '#032f62',
+        'hljs-built_in': '#e36209', 'hljs-symbol': '#e36209', 'hljs-comment': '#6a737d', 'hljs-code': '#6a737d',
+        'hljs-formula': '#6a737d', 'hljs-name': '#22863a', 'hljs-quote': '#22863a', 'hljs-selector-tag': '#22863a',
+        'hljs-selector-pseudo': '#22863a', 'hljs-bullet': '#735c0f', 'hljs-addition': '#22863a', 'hljs-deletion': '#b31d28',
+    };
+
+    const mono = 'Consolas, "Cascadia Mono", "Courier New", monospace';
+    const border = '#d1d9e0';
+
+    // Email clients and Word ignore <style> blocks in pasted HTML; only inline styles survive.
+    function inlineStyles(root) {
+        const set = (selector, css) => root.querySelectorAll(selector).forEach((el) => el.style.cssText += css);
+        root.style.cssText = 'font-family: "Segoe UI", -apple-system, sans-serif; font-size: 14px; line-height: 1.5; color: #1f2328;';
+        set('h1, h2', `border-bottom: 1px solid ${border}; padding-bottom: .3em;`);
+        set('pre', `background: #f6f8fa; padding: 12px 16px; border-radius: 6px; font-family: ${mono}; font-size: 13px; line-height: 1.45; white-space: pre-wrap; color: #1f2328;`);
+        set('pre code', `font-family: ${mono}; background: transparent; padding: 0;`);
+        root.querySelectorAll('code').forEach((el) => {
+            if (!el.closest('pre')) el.style.cssText += `font-family: ${mono}; font-size: 85%; background: #eff1f3; padding: .2em .4em; border-radius: 6px;`;
+        });
+        set('table', 'border-collapse: collapse; margin-bottom: 16px;');
+        set('th, td', `border: 1px solid ${border}; padding: 6px 13px;`);
+        set('th', 'background: #f6f8fa; font-weight: 600;');
+        set('blockquote', `border-left: 4px solid ${border}; padding: 0 1em; color: #59636e; margin: 0 0 16px 0;`);
+        set('a', 'color: #0969da;');
+        set('img', 'max-width: 100%;');
+        root.querySelectorAll('pre [class*="hljs-"]').forEach((el) => {
+            const color = [...el.classList].map((c) => hljsLight[c]).find(Boolean);
+            if (color) el.style.color = color;
+            if (el.classList.contains('hljs-section') || el.classList.contains('hljs-strong')) el.style.fontWeight = '700';
+            if (el.classList.contains('hljs-emphasis')) el.style.fontStyle = 'italic';
+        });
+    }
+
+    // Rasterize an SVG (for clipboard: Outlook/Word don't render inline SVG). 2x for sharpness.
+    function svgToPng(svgText) {
+        const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+        const svg = doc.documentElement;
+        const [, , w, h] = (svg.getAttribute('viewBox') || '0 0 600 400').split(/[\s,]+/).map(Number);
+        svg.setAttribute('width', w);
+        svg.setAttribute('height', h);
+        svg.style.maxWidth = '';
+        const source = new XMLSerializer().serializeToString(svg);
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                const scale = 2;
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.ceil(w * scale);
+                canvas.height = Math.ceil(h * scale);
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve({ src: canvas.toDataURL('image/png'), width: Math.round(w) });
+            };
+            img.onerror = () => reject(new Error('could not rasterize diagram'));
+            img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(source);
+        });
+    }
+
+    async function exportContent(forClipboard) {
+        const clone = content.cloneNode(true);
+
+        // Diagrams: light theme; plain SVG text labels (foreignObject HTML labels would taint the canvas).
+        const diagrams = [...clone.querySelectorAll('.mermaid')];
+        if (diagrams.length) {
+            mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default', htmlLabels: false, flowchart: { htmlLabels: false } });
+            try {
+                for (const el of diagrams) {
+                    const source = el.dataset.src ?? el.textContent;
+                    const id = 'export-' + ++diagramId;
+                    try {
+                        const { svg } = await mermaid.render(id, source);
+                        if (forClipboard) {
+                            const png = await svgToPng(svg);
+                            el.innerHTML = `<img src="${png.src}" width="${png.width}" alt="diagram">`;
+                        } else {
+                            el.innerHTML = svg;
+                        }
+                    } catch (err) {
+                        document.getElementById(id)?.remove();
+                        document.getElementById('d' + id)?.remove();
+                        el.innerHTML = '';
+                        const pre = document.createElement('pre');
+                        pre.textContent = source;
+                        el.replaceWith(pre);
+                    }
+                }
+            } finally {
+                initMermaid(); // back to the live preview's theme and settings
+            }
+        }
+
+        // Internal bookkeeping attributes don't belong in exported HTML.
+        clone.querySelectorAll('[data-line], [data-src], [data-highlighted]').forEach((el) => {
+            el.removeAttribute('data-line');
+            el.removeAttribute('data-src');
+            el.removeAttribute('data-highlighted');
+        });
+        clone.removeAttribute('style'); // the live preview's accent override
+
+        if (!forClipboard) return clone.innerHTML;
+
+        // Clipboard: a self-styled <div> fragment (base font/color inline, since there's no stylesheet).
+        inlineStyles(clone);
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = clone.style.cssText;
+        wrapper.innerHTML = clone.innerHTML;
+        return wrapper.outerHTML;
+    }
+
     // ---------- Links, theme, messaging ----------
 
     // With <base> pointing at the document folder, "#anchor" would navigate away; scroll in-page instead.
@@ -182,6 +302,11 @@
             case 'render': render(m); break;
             case 'scrollToLine': scrollToLine(m.line, m.edge); break;
             case 'theme': applyTheme(m); break;
+            case 'export':
+                exportContent(m.forClipboard).then(
+                    (html) => post({ type: 'exportResult', id: m.id, html }),
+                    (err) => post({ type: 'exportResult', id: m.id, error: String(err?.message ?? err) }));
+                break;
         }
     });
 

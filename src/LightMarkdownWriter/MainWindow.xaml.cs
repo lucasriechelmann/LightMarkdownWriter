@@ -77,6 +77,7 @@ public partial class MainWindow : FluentWindow
         Loaded += OnLoaded;
 
         SetUpEditing();
+        SetUpExport();
     }
 
     // ---------- Editing: formatting shortcuts, list continuation, find/replace ----------
@@ -138,6 +139,110 @@ public partial class MainWindow : FluentWindow
     private void OnLinkClick(object sender, RoutedEventArgs e) => RunFormatting(MarkdownFormatting.InsertLink);
     private void OnCodeBlockClick(object sender, RoutedEventArgs e) => RunFormatting(MarkdownFormatting.InsertCodeBlock);
     private void OnFindClick(object sender, RoutedEventArgs e) => OpenFind(replace: false);
+
+    // ---------- Export ----------
+
+    private enum ExportKind { Html, Pdf, Clipboard }
+
+    private readonly DialogService _exportDialogs = new();
+    private DispatcherTimer? _statusTimer;
+    private string? _statusOpenPath;
+
+    private void SetUpExport()
+    {
+        AddKeyBinding(InputBindings, Key.E, ModifierKeys.Control | ModifierKeys.Shift, () => _ = ExportAsync(ExportKind.Html));
+        AddKeyBinding(InputBindings, Key.P, ModifierKeys.Control, () => _ = ExportAsync(ExportKind.Pdf));
+        AddKeyBinding(InputBindings, Key.C, ModifierKeys.Control | ModifierKeys.Shift, () => _ = ExportAsync(ExportKind.Clipboard));
+    }
+
+    private void OnExportClick(object sender, RoutedEventArgs e)
+    {
+        var menu = ExportButton.ContextMenu!;
+        menu.PlacementTarget = ExportButton;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    private void OnExportHtmlClick(object sender, RoutedEventArgs e) => _ = ExportAsync(ExportKind.Html);
+    private void OnExportPdfClick(object sender, RoutedEventArgs e) => _ = ExportAsync(ExportKind.Pdf);
+    private void OnCopyHtmlClick(object sender, RoutedEventArgs e) => _ = ExportAsync(ExportKind.Clipboard);
+
+    private async Task ExportAsync(ExportKind kind)
+    {
+        if (_watchedDocument is not { } doc) return;
+        var folder = doc.FilePath is null ? null : Path.GetDirectoryName(doc.FilePath);
+        var baseName = doc.FilePath is null ? doc.DisplayName : Path.GetFileNameWithoutExtension(doc.FilePath);
+
+        try
+        {
+            await Preview.InitializeAsync();
+            RenderPreview(force: true); // the preview may be hidden (editor-only) and stale
+            var html = await Preview.GetExportHtmlAsync(forClipboard: kind == ExportKind.Clipboard);
+
+            switch (kind)
+            {
+                case ExportKind.Clipboard:
+                    ExportService.CopyHtmlToClipboard(ExportService.EmbedLocalImages(html, folder), doc.Document.Text);
+                    ShowStatus("Copied as HTML", openPath: null);
+                    break;
+
+                case ExportKind.Html:
+                {
+                    var path = _exportDialogs.ShowExportDialog(baseName + ".html", "HTML file (*.html)|*.html", ".html", folder);
+                    if (path is null) return;
+                    ExportService.WriteHtmlFile(path, ExportService.BuildStandaloneHtml(html, ExportService.TitleFor(html, baseName), folder));
+                    ShowStatus($"Exported {Path.GetFileName(path)}", path);
+                    break;
+                }
+
+                case ExportKind.Pdf:
+                {
+                    var path = _exportDialogs.ShowExportDialog(baseName + ".pdf", "PDF document (*.pdf)|*.pdf", ".pdf", folder);
+                    if (path is null || Preview.Environment is not { } environment) return;
+                    var standalone = ExportService.BuildStandaloneHtml(html, ExportService.TitleFor(html, baseName), folder);
+                    await ExportService.ExportPdfAsync(environment, new System.Windows.Interop.WindowInteropHelper(this).Handle, standalone, path);
+                    ShowStatus($"Exported {Path.GetFileName(path)}", path);
+                    break;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
+                                       or System.Runtime.InteropServices.COMException or WebView2RuntimeNotFoundException)
+        {
+            _exportDialogs.ShowError($"Export failed:\n{ex.Message}");
+        }
+    }
+
+    private void ShowStatus(string message, string? openPath)
+    {
+        StatusText.Text = message;
+        _statusOpenPath = openPath;
+        StatusOpenButton.Visibility = openPath is null ? Visibility.Collapsed : Visibility.Visible;
+        StatusPanel.Visibility = Visibility.Visible;
+
+        _statusTimer ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        _statusTimer.Stop();
+        _statusTimer.Tick -= HideStatus;
+        _statusTimer.Tick += HideStatus;
+        _statusTimer.Start();
+    }
+
+    private void HideStatus(object? sender, EventArgs e)
+    {
+        _statusTimer?.Stop();
+        StatusPanel.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnStatusOpenClick(object sender, RoutedEventArgs e)
+    {
+        if (_statusOpenPath is null) return;
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(_statusOpenPath) { UseShellExecute = true });
+        }
+        catch (System.ComponentModel.Win32Exception) { /* no app registered for the file type */ }
+        HideStatus(null, EventArgs.Empty);
+    }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
@@ -413,10 +518,10 @@ public partial class MainWindow : FluentWindow
             RenderPreview();
     }
 
-    private void RenderPreview()
+    private void RenderPreview(bool force = false)
     {
         _renderTimer.Stop();
-        if (_appliedMode == ViewMode.Editor || _watchedDocument is not { } doc) return;
+        if ((_appliedMode == ViewMode.Editor && !force) || _watchedDocument is not { } doc) return;
 
         var html = MarkdownRenderer.ToHtml(doc.Document.Text);
         var folder = doc.FilePath is null ? null : Path.GetDirectoryName(doc.FilePath);

@@ -1,4 +1,4 @@
-﻿<ui:FluentWindow x:Class="LightMarkdownWriter.MainWindow"
+<ui:FluentWindow x:Class="LightMarkdownWriter.MainWindow"
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -48,6 +48,11 @@
 
         <!-- Command bar -->
         <Grid Grid.Row="1" Margin="8,0,8,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
             <Grid.Resources>
                 <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                     <Setter Property="Appearance" Value="Transparent" />
@@ -57,11 +62,28 @@
                 </Style>
             </Grid.Resources>
 
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left">
                 <ui:Button Icon="{ui:SymbolIcon DocumentAdd24}" Content="New" Command="{Binding NewCommand}" ToolTip="New (Ctrl+N)" />
                 <ui:Button Icon="{ui:SymbolIcon FolderOpen24}" Content="Open" Command="{Binding OpenCommand}" ToolTip="Open (Ctrl+O)" />
                 <ui:Button Icon="{ui:SymbolIcon Save24}" Content="Save" Command="{Binding SaveCommand}" ToolTip="Save (Ctrl+S)" />
                 <ui:Button Icon="{ui:SymbolIcon SaveEdit24}" Content="Save as" Command="{Binding SaveAsCommand}" ToolTip="Save as (Ctrl+Shift+S)" />
+                <ui:Button x:Name="ExportButton" Icon="{ui:SymbolIcon ArrowExportLtr24}" Content="Export"
+                           ToolTip="Export as HTML or PDF, or copy as HTML" Click="OnExportClick">
+                    <ui:Button.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Export as HTML…" InputGestureText="Ctrl+Shift+E" Click="OnExportHtmlClick">
+                                <MenuItem.Icon><ui:SymbolIcon Symbol="Code24" /></MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="Export as PDF…" InputGestureText="Ctrl+P" Click="OnExportPdfClick">
+                                <MenuItem.Icon><ui:SymbolIcon Symbol="DocumentPdf24" /></MenuItem.Icon>
+                            </MenuItem>
+                            <Separator />
+                            <MenuItem Header="Copy as HTML" InputGestureText="Ctrl+Shift+C" Click="OnCopyHtmlClick">
+                                <MenuItem.Icon><ui:SymbolIcon Symbol="Copy24" /></MenuItem.Icon>
+                            </MenuItem>
+                        </ContextMenu>
+                    </ui:Button.ContextMenu>
+                </ui:Button>
 
                 <Rectangle Width="1" Margin="8,6" Fill="{DynamicResource DividerStrokeColorDefaultBrush}" />
 
@@ -74,8 +96,19 @@
                 <ui:Button Icon="{ui:SymbolIcon Search20}" ToolTip="Find (Ctrl+F) / Replace (Ctrl+H)" Click="OnFindClick" />
             </StackPanel>
 
+            <!-- Export result. Lives in the command bar rather than as a toast over the content, because the
+                 preview is a native window that would cover anything drawn on top of it. -->
+            <StackPanel x:Name="StatusPanel" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Left"
+                        Margin="16,0,8,0" VerticalAlignment="Center" Visibility="Collapsed">
+                <ui:SymbolIcon Symbol="CheckmarkCircle24" Filled="True" FontSize="16" VerticalAlignment="Center"
+                               Foreground="{DynamicResource SystemFillColorSuccessBrush}" />
+                <TextBlock x:Name="StatusText" Margin="6,0,0,0" VerticalAlignment="Center" />
+                <ui:Button x:Name="StatusOpenButton" Content="Open" Margin="8,0,0,0" Padding="8,2"
+                           Click="OnStatusOpenClick" />
+            </StackPanel>
+
             <!-- View mode: a segmented control built from RadioButtons styled as toggle buttons. -->
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
                 <StackPanel.Resources>
                     <Style TargetType="RadioButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
                         <Setter Property="GroupName" Value="ViewMode" />

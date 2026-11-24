@@ -42,7 +42,7 @@ public partial class PreviewView : UserControl
     {
         // Keep browser data out of the exe folder so the app also works from read-only locations.
         var dataFolder = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
             "LightMarkdownWriter", "WebView2");
         var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: dataFolder);
         await WebView.EnsureCoreWebView2Async(environment);
@@ -166,21 +166,39 @@ public partial class PreviewView : UserControl
         return fullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase) && File.Exists(fullPath) ? fullPath : null;
     }
 
-    private static string ContentTypeFor(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+    private static string ContentTypeFor(string path) => LightMarkdownWriter.Services.MediaTypes.ForPath(path);
+
+    // ---------- Export ----------
+
+    private readonly Dictionary<int, TaskCompletionSource<string>> _exportRequests = [];
+    private int _nextExportId;
+
+    /// <summary>The browser environment, for creating an off-screen WebView (PDF export).</summary>
+    public CoreWebView2Environment? Environment => WebView.CoreWebView2?.Environment;
+
+    /// <summary>
+    /// The rendered document as HTML for export, in the light theme: highlighted code, Mermaid diagrams as SVG
+    /// (or, <paramref name="forClipboard"/>, as PNG with inline styles so it pastes into email/Word).
+    /// </summary>
+    public Task<string> GetExportHtmlAsync(bool forClipboard)
     {
-        ".png" => "image/png",
-        ".jpg" or ".jpeg" => "image/jpeg",
-        ".gif" => "image/gif",
-        ".webp" => "image/webp",
-        ".svg" => "image/svg+xml",
-        ".bmp" => "image/bmp",
-        ".ico" => "image/x-icon",
-        ".avif" => "image/avif",
-        ".mp4" => "video/mp4",
-        ".webm" => "video/webm",
-        ".mp3" => "audio/mpeg",
-        _ => "application/octet-stream",
-    };
+        if (!_pageReady) throw new InvalidOperationException("The preview isn't ready yet.");
+        var id = ++_nextExportId;
+        var request = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _exportRequests[id] = request;
+        WebView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { type = "export", id, forClipboard }));
+        return request.Task;
+    }
+
+    private void CompleteExport(JsonElement message)
+    {
+        var id = message.GetProperty("id").GetInt32();
+        if (!_exportRequests.Remove(id, out var request)) return;
+        if (message.TryGetProperty("error", out var error))
+            request.SetException(new InvalidOperationException(error.GetString()));
+        else
+            request.SetResult(message.GetProperty("html").GetString() ?? "");
+    }
 
     private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
@@ -201,6 +219,10 @@ public partial class PreviewView : UserControl
                     ? edge.GetString()
                     : null;
                 PreviewScrolled?.Invoke(_syncLine, _syncEdge);
+                break;
+
+            case "exportResult":
+                CompleteExport(root);
                 break;
         }
     }
