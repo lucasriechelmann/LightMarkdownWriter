@@ -1,0 +1,3 @@
+# Third-party preview libraries (github-markdown-css, highlight.js, mermaid): keep them out of
+# GitHub's language stats and out of diffs.
+src/LightMarkdownWriter/Assets/Preview/vendor/** linguist-vendored -diff

@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<!-- Markdown highlighting for AvalonEdit. {Placeholders} are replaced with a light or dark palette at load time
+     (see MarkdownHighlighting.cs), because loaded definitions are frozen and can't be recolored. -->
+<SyntaxDefinition name="Markdown" extensions=".md;.markdown" xmlns="http://icsharpcode.net/sharpdevelop/syntaxdefinition/2008">
+  <Color name="Heading" foreground="{Heading}" fontWeight="bold" />
+  <Color name="Code" foreground="{Code}" />
+  <Color name="Link" foreground="{Link}" />
+  <Color name="Quote" foreground="{Quote}" fontStyle="italic" />
+  <Color name="Marker" foreground="{Marker}" />
+  <Color name="Dim" foreground="{Dim}" />
+  <Color name="Bold" fontWeight="bold" />
+  <Color name="Italic" fontStyle="italic" />
+  <Color name="Strike" foreground="{Dim}" strikethrough="true" />
+
+  <RuleSet>
+    <!-- Fenced code blocks: whole block, no inner highlighting. End must be a line with only the fence. -->
+    <Span color="Code" multiline="true">
+      <Begin><![CDATA[^\s*```]]></Begin>
+      <End><![CDATA[^\s*```\s*$]]></End>
+    </Span>
+    <Span color="Code" multiline="true">
+      <Begin><![CDATA[^\s*~~~]]></Begin>
+      <End><![CDATA[^\s*~~~\s*$]]></End>
+    </Span>
+
+    <Span color="Dim" multiline="true">
+      <Begin><![CDATA[<!--]]></Begin>
+      <End><![CDATA[-->]]></End>
+    </Span>
+
+    <!-- Inline code (single line; an unclosed backtick runs to the end of the line). -->
+    <Span color="Code">
+      <Begin>`</Begin>
+      <End>`</End>
+    </Span>
+
+    <Rule color="Heading">^\#{1,6}[ \t].*$</Rule>
+    <Rule color="Quote">^\s*>.*$</Rule>
+
+    <!-- Horizontal rule before list markers, so "* * *" isn't read as a bullet. -->
+    <!-- AvalonEdit compiles rules with ExplicitCapture: backreferences need named groups. -->
+    <Rule color="Dim">^\s*(?&lt;c>[-*_])(\s*\k&lt;c>){2,}\s*$</Rule>
+    <Rule color="Dim">^(=+|-+)\s*$</Rule>
+
+    <Rule color="Marker">^\s*([-*+]|\d{1,9}[.)])(?=\s)</Rule>
+    <Rule color="Marker">(?&lt;=^\s*([-*+]|\d{1,9}[.)])\s+)\[[ xX]\]</Rule>
+
+    <!-- Links, images, reference definitions, autolinks. -->
+    <Rule color="Link">!?\[[^\]\n]*\]\([^)\n]*\)</Rule>
+    <Rule color="Link">!?\[[^\]\n]*\]\[[^\]\n]*\]</Rule>
+    <Rule color="Link">^\s*\[[^\]]+\]:\s+\S.*$</Rule>
+    <Rule color="Link">&lt;(https?|mailto):[^>\s]+></Rule>
+
+    <Rule color="Bold">(?&lt;m>\*\*|__)(?=\S)(.+?)(?&lt;=\S)\k&lt;m></Rule>
+    <Rule color="Italic">(?&lt;![\*\w])\*(?=[^\s*])(.+?)(?&lt;=[^\s*])\*(?!\*)</Rule>
+    <Rule color="Italic">(?&lt;![_\w])_(?=[^\s_])(.+?)(?&lt;=[^\s_])_(?![_\w])</Rule>
+    <Rule color="Strike">~~(?=\S)(.+?)(?&lt;=\S)~~</Rule>
+
+    <Rule color="Dim">&lt;/?[A-Za-z][^>\n]*></Rule>
+    <Rule color="Dim">\\[\\`*_{}\[\]()#+\-.!|~&lt;>]</Rule>
+    <Rule color="Dim">\|</Rule>
+  </RuleSet>
+</SyntaxDefinition>
