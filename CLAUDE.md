@@ -1,6 +1,6 @@
 # LightMarkdownWriter
 
-A light markdown editor for **Windows 11** with a live, GitHub-style preview.
+A light markdown editor for Windows with a live, GitHub-style preview. It's designed for Windows 11 and also supports Windows 10 1809+.
 
 - Language and UI: WPF on .NET 10, with WPF-UI for the Fluent/Mica look.
 - Editor: AvalonEdit. Markdown → HTML: Markdig. Preview: WebView2.
@@ -27,7 +27,7 @@ Inside the app project:
 ## Standing rules
 
 - **Search before creating.** Check `Services/`, `Editing/` and the view models for an existing helper before adding one. For example, use `MediaTypes.ForPath` for content types, `PreviewAssets` for embedded web assets and `ExportService.EmbedLocalImages` for data URIs.
-- **Windows 11 only.** Don't add Windows 10 fallbacks or workarounds.
+- **Windows 10 1809+ stays supported** (as the README says). The app is designed and tested on Windows 11, and Windows 10 keeps working with WPF-UI's own fallbacks (no Mica). Don't introduce Windows 11-only APIs without a fallback.
 - **Keep it light.**
   - No new runtime dependencies without a reason worth writing in PLAN.md.
   - Web libraries are vendored, at pinned versions, in `Assets/Preview/vendor/`. They're never loaded from a CDN at runtime.
