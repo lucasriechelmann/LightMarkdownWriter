@@ -43,14 +43,99 @@ public partial class MainViewModel : ObservableObject
         ? AppName
         : $"{(ActiveDocument.IsDirty ? "• " : "")}{ActiveDocument.DisplayName} - {AppName}";
 
-    public MainViewModel(IDialogService dialogs, IEnumerable<string> startupFiles)
+    public MainViewModel(IDialogService dialogs, IEnumerable<string> startupFiles,
+                         SessionService? sessionService = null, Session? session = null)
     {
         _dialogs = dialogs;
+        _sessionService = sessionService;
+        if (session is not null) RestoreSession(session);
+
         foreach (var path in startupFiles)
             OpenPath(path);
         if (Documents.Count == 0)
             New();
+
+        CheckExternalChanges(); // files edited while the app was closed
     }
+
+    // ---------- Session (restore on start, persist while running and on close) ----------
+
+    private readonly SessionService? _sessionService;
+    private readonly HashSet<Guid> _backedUp = []; // tabs whose backup file is current
+
+    private void RestoreSession(Session session)
+    {
+        foreach (var tab in session.Tabs)
+        {
+            var backup = tab.HasBackup ? _sessionService?.ReadBackup(tab.Id) : null;
+            if (DocumentViewModel.Restore(tab, backup) is not { } doc) continue; // file deleted and nothing unsaved
+            if (backup is not null) _backedUp.Add(doc.Id);
+            Documents.Add(doc);
+        }
+
+        if (Documents.Count > 0)
+            ActiveDocument = Documents[Math.Clamp(session.ActiveIndex, 0, Documents.Count - 1)];
+        if (Enum.TryParse<ViewMode>(session.ViewMode, out var mode))
+            ViewMode = mode;
+    }
+
+    /// <summary>
+    /// Writes backups for tabs with unsaved text (only those that changed) and the session file.
+    /// <paramref name="decorate"/> lets the window add its own state (placement, splitter). Throws on I/O failure.
+    /// </summary>
+    public void PersistSession(Func<Session, Session>? decorate = null)
+    {
+        if (_sessionService is null) return;
+
+        var tabs = new List<SessionTab>(Documents.Count);
+        foreach (var doc in Documents)
+        {
+            var needsBackup = doc.IsDirty;
+            if (needsBackup && (doc.BackupStale || !_backedUp.Contains(doc.Id)))
+            {
+                _sessionService.WriteBackup(doc.Id, doc.Document.Text);
+                doc.BackupStale = false;
+                _backedUp.Add(doc.Id);
+            }
+            else if (!needsBackup)
+            {
+                _backedUp.Remove(doc.Id); // Save() deletes the orphaned file
+            }
+            tabs.Add(doc.ToSessionTab(hasBackup: needsBackup));
+        }
+
+        var session = new Session
+        {
+            Tabs = tabs,
+            ActiveIndex = ActiveDocument is null ? 0 : Math.Max(0, Documents.IndexOf(ActiveDocument)),
+            ViewMode = ViewMode.ToString(),
+        };
+        _sessionService.Save(decorate?.Invoke(session) ?? session);
+    }
+
+    // ---------- Files changed outside the app ----------
+
+    public void CheckExternalChanges()
+    {
+        foreach (var doc in Documents)
+        {
+            try { doc.CheckDisk(); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* try again next time */ }
+        }
+    }
+
+    [RelayCommand]
+    private void ReloadFromDisk()
+    {
+        try { ActiveDocument?.ReloadFromDisk(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _dialogs.ShowError($"Could not reload {ActiveDocument?.FilePath}:\n{ex.Message}");
+        }
+    }
+
+    [RelayCommand]
+    private void KeepMyVersion() => ActiveDocument?.IgnoreExternalChange();
 
     partial void OnActiveDocumentChanged(DocumentViewModel? oldValue, DocumentViewModel? newValue)
     {
@@ -154,7 +239,7 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>Asks about every unsaved tab. Returns false if the user cancelled.
-    /// (Milestone 5 replaces this with session restore, so closing won't prompt.)</summary>
+    /// Only used as a fallback when the session can't be saved; normally closing keeps unsaved text.</summary>
     public async Task<bool> ConfirmCloseAllAsync()
     {
         foreach (var doc in Documents.Where(d => d.IsDirty).ToList())

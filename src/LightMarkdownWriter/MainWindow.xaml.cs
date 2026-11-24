@@ -27,12 +27,32 @@ public partial class MainWindow : FluentWindow
     private bool _editorSyncQueued;
     private (double Line, string? Edge)? _previewPosition; // last position the user scrolled the preview to
 
-    public MainWindow(MainViewModel viewModel, bool followSystemTheme = true)
+    // Session persistence: saved ~2 s after changes (crash safety) and on close.
+    private readonly DispatcherTimer _sessionTimer;
+    private bool _positionSaveQueued;
+
+    public MainWindow(MainViewModel viewModel, bool followSystemTheme = true, Session? session = null)
     {
         _viewModel = viewModel;
         _followSystemTheme = followSystemTheme;
         DataContext = viewModel;
         InitializeComponent();
+
+        RestorePlacement(session);
+        _sessionTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(2) };
+        _sessionTimer.Tick += (_, _) =>
+        {
+            _sessionTimer.Stop();
+            PersistSession();
+        };
+        viewModel.Documents.CollectionChanged += (_, _) => ScheduleSessionSave();
+        Editor.TextArea.Caret.PositionChanged += (_, _) =>
+        {
+            if (_watchedDocument is { } doc && Editor.Document == doc.Document)
+                doc.CaretOffset = Editor.CaretOffset;
+        };
+        // Files edited in another program: check whenever the user comes back to this window.
+        Activated += (_, _) => _viewModel.CheckExternalChanges();
 
         // Breathing room between the line-number gutter and the text.
         Editor.TextArea.TextView.Margin = new Thickness(12, 0, 0, 0);
@@ -128,7 +148,7 @@ public partial class MainWindow : FluentWindow
 
         WatchDocument(_viewModel.ActiveDocument);
         ApplyViewMode(_viewModel.ViewMode);
-        Editor.Focus();
+        RestoreEditorPosition(_viewModel.ActiveDocument);
 
         try
         {
@@ -181,6 +201,7 @@ public partial class MainWindow : FluentWindow
 
     private void OnEditorScrollOffsetChanged(object? sender, EventArgs e)
     {
+        RememberEditorScroll();
         if (Environment.TickCount64 < _ignoreEditorScrollUntil) return;
         _previewPosition = null; // the editor is now the one being driven
         if (_editorSyncQueued) return;
@@ -252,12 +273,115 @@ public partial class MainWindow : FluentWindow
             case nameof(MainViewModel.ActiveDocument):
                 WatchDocument(_viewModel.ActiveDocument);
                 RenderPreview();
-                Dispatcher.BeginInvoke(() => Editor.Focus(), DispatcherPriority.Input);
+                RestoreEditorPosition(_viewModel.ActiveDocument);
+                ScheduleSessionSave();
                 break;
             case nameof(MainViewModel.ViewMode):
                 ApplyViewMode(_viewModel.ViewMode);
+                ScheduleSessionSave();
                 break;
         }
+    }
+
+    // ---------- Per-tab caret/scroll (the editor control is shared by all tabs) ----------
+
+    private void RememberEditorScroll()
+    {
+        if (_positionSaveQueued) return;
+        _positionSaveQueued = true;
+        Dispatcher.BeginInvoke(() =>
+        {
+            _positionSaveQueued = false;
+            // Only record if the editor still shows the watched document (not mid tab-switch).
+            if (_watchedDocument is { } doc && Editor.Document == doc.Document && EditorTopPosition() is var (line, _))
+                doc.ScrollLine = line;
+        }, DispatcherPriority.Background);
+    }
+
+    /// <summary>Puts the caret and scroll position back where they were when this tab was last shown.</summary>
+    private void RestoreEditorPosition(DocumentViewModel? doc)
+    {
+        if (doc is null) return;
+        var caret = doc.CaretOffset;
+        var line = doc.ScrollLine;
+        // After layout, so the editor has measured the new document.
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (Editor.Document != doc.Document) return; // switched again meanwhile
+            Editor.CaretOffset = Math.Clamp(caret, 0, doc.Document.TextLength);
+            ScrollEditorTo(line, line <= 0 ? "top" : null);
+            doc.ScrollLine = line;
+            Preview.SyncToLine(line, line <= 0 ? "top" : null);
+            Editor.Focus();
+        }, DispatcherPriority.Loaded);
+    }
+
+    // ---------- Session ----------
+
+    private void ScheduleSessionSave()
+    {
+        _sessionTimer.Stop();
+        _sessionTimer.Start();
+    }
+
+    /// <summary>Saves tabs, unsaved text and window state. False if it couldn't be written.</summary>
+    private bool PersistSession()
+    {
+        try
+        {
+            _viewModel.PersistSession(session => session with
+            {
+                EditorShare = CurrentEditorShare(),
+                Window = CurrentPlacement(),
+            });
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private double CurrentEditorShare()
+    {
+        var total = EditorColumn.ActualWidth + PreviewColumn.ActualWidth;
+        return _appliedMode == ViewMode.Split && total > 0 ? EditorColumn.ActualWidth / total : _editorShare;
+    }
+
+    private WindowPlacement CurrentPlacement()
+    {
+        // RestoreBounds is the normal-state rectangle, also while maximized or minimized.
+        var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
+        return new WindowPlacement(bounds.Left, bounds.Top, bounds.Width, bounds.Height, WindowState == WindowState.Maximized);
+    }
+
+    private void RestorePlacement(Session? session)
+    {
+        if (session is null) return;
+        _editorShare = Math.Clamp(session.EditorShare, 0.15, 0.85);
+
+        if (session.Window is not { } w || w.Width < MinWidth || w.Height < MinHeight) return;
+        // Only if a good part of the window would be on a screen (monitors change between sessions).
+        var screen = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop,
+                              SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
+        var visible = Rect.Intersect(screen, new Rect(w.Left, w.Top, w.Width, w.Height));
+        if (visible.IsEmpty || visible.Width < 200 || visible.Height < 100) return;
+
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Left = w.Left;
+        Top = w.Top;
+        Width = w.Width;
+        Height = w.Height;
+        if (w.Maximized) WindowState = WindowState.Maximized;
+    }
+
+    /// <summary>Called when another launch of the app hands us files (single instance).</summary>
+    public void OpenFromOtherInstance(IReadOnlyList<string> paths)
+    {
+        foreach (var path in paths)
+            _viewModel.OpenPath(path);
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
     }
 
     private void WatchDocument(DocumentViewModel? doc)
@@ -279,6 +403,7 @@ public partial class MainWindow : FluentWindow
     {
         _renderTimer.Stop();
         _renderTimer.Start();
+        ScheduleSessionSave(); // backs up unsaved text shortly after typing pauses
     }
 
     private void OnDocumentPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -301,7 +426,7 @@ public partial class MainWindow : FluentWindow
     private void ApplyViewMode(ViewMode mode)
     {
         // Remember where the user dragged the splitter before leaving split view.
-        if (_appliedMode == ViewMode.Split)
+        if (_appliedMode == ViewMode.Split && mode != ViewMode.Split)
         {
             var total = EditorColumn.ActualWidth + PreviewColumn.ActualWidth;
             if (total > 0) _editorShare = EditorColumn.ActualWidth / total;
@@ -348,6 +473,11 @@ public partial class MainWindow : FluentWindow
         base.OnClosing(e);
         if (_closeConfirmed) return;
 
+        // Normal case: keep every tab and its unsaved text for next time; no questions asked.
+        _sessionTimer.Stop();
+        if (PersistSession()) return;
+
+        // Couldn't write the session (disk full, permissions...): fall back to asking, so nothing is lost.
         // The confirmation is async, so cancel this close and re-issue it once the user has answered.
         e.Cancel = true;
         if (await _viewModel.ConfirmCloseAllAsync())

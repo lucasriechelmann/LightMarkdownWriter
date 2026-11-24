@@ -40,6 +40,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -131,8 +132,35 @@
             </TabControl.ItemTemplate>
         </TabControl>
 
+        <!-- Shown when the active file changed on disk while it had unsaved edits, or was deleted.
+             Hand-built in the Windows 11 InfoBar style: WPF-UI's InfoBar doesn't render custom Content (buttons). -->
+        <Border Grid.Row="3" Margin="8,4,8,0" Padding="12,8" CornerRadius="6" BorderThickness="1"
+                Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                Visibility="{Binding ActiveDocument.HasExternalChange, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}">
+            <DockPanel LastChildFill="False">
+                <ui:SymbolIcon DockPanel.Dock="Left" Symbol="Warning20" Filled="True" FontSize="18"
+                               Foreground="{DynamicResource SystemFillColorCautionBrush}" VerticalAlignment="Center" />
+                <TextBlock DockPanel.Dock="Left" Margin="12,0,8,0" VerticalAlignment="Center" TextWrapping="Wrap">
+                    <Run Text="File changed on disk" FontWeight="SemiBold" />
+                    <Run Text="  " />
+                    <Run Text="{Binding ActiveDocument.ExternalChangeMessage, Mode=OneWay}" />
+                </TextBlock>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ui:Button Content="Reload from disk" Margin="8,0,0,0" Appearance="Primary"
+                               Command="{Binding ReloadFromDiskCommand}"
+                               Visibility="{Binding ActiveDocument.IsModifiedOnDisk, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}" />
+                    <ui:Button Content="Keep my version" Margin="8,0,0,0"
+                               Command="{Binding KeepMyVersionCommand}" />
+                    <ui:Button Content="Close tab" Margin="8,0,0,0"
+                               Command="{Binding CloseTabCommand}"
+                               Visibility="{Binding ActiveDocument.IsDeletedOnDisk, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
         <!-- Editor | splitter | preview -->
-        <Grid Grid.Row="3" Margin="8,4,8,8">
+        <Grid Grid.Row="4" Margin="8,4,8,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="EditorColumn" Width="*" />
                 <ColumnDefinition x:Name="SplitterColumn" Width="Auto" />

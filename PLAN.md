@@ -73,8 +73,20 @@ LightMarkdownWriter/
   - `session.json` holds the tab order, paths, active tab, caret/scroll position, view mode and window bounds.
   - `backups\{guid}.md` holds the text of dirty or untitled tabs. It is written on a debounce (~2 s) and on close.
 - On close, nothing prompts. Everything is kept and restored on the next start (Notepad++ behaviour).
+  - If the session can't be written (disk full, permissions), closing falls back to the save prompt, so nothing is lost silently.
+- The session is also saved about 2 s after changes, for crash safety. Writes go to a temp file first and are then renamed (atomic).
 - Closing a single dirty tab does prompt (Save / Don't save / Cancel).
-- If the file on disk changed and the tab has no local edits, it reloads. If it has local edits, an info bar offers to reload.
+- Restored tabs:
+  - Unsaved text is restored and the tab is marked unsaved via `UndoStack.DiscardOriginalFileMarker()`. Undo history isn't kept across restarts.
+  - Each tab's caret and scroll position are remembered, both across restarts and when switching tabs.
+  - The window position, size and maximized state are restored, but only if the window would still be on a screen. So is the splitter position.
+- Encoding is stored as `utf-8` or `utf-8+bom`. `Encoding.WebName` alone loses the byte-order mark (BOM), and restoring from it would add a BOM to files that had none.
+- External changes are checked when the window is activated, and for edits made while the app was closed (via the file timestamp stored in the session).
+  - A clean tab reloads silently. Only the changed span is replaced, so the caret and scroll position stay put.
+  - A tab with unsaved edits shows a banner: Reload from disk / Keep my version. A deleted file offers Keep / Close tab.
+- Single instance: a named mutex plus a named pipe (`CurrentUserOnly`), scoped per user and logon session.
+  - A second launch sends absolute paths (resolved in the sender, since its working directory differs) and exits.
+  - It calls `AllowSetForegroundWindow` so the running window may come to the front.
 
 ### Export
 - **HTML**: a standalone file with inlined CSS. Mermaid is pre-rendered to SVG (taken from the live DOM), so the file needs no JS.
