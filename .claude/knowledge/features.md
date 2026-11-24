@@ -23,15 +23,6 @@ Each feature, in user terms, with the code that owns it. Folder-level ownership 
 | **Packaging and icon** | One portable exe; the "MD" app icon | `Properties/PublishProfiles/win-x64.pubxml`, `Services/PreviewAssets.cs`, `Assets/app.ico` (from `tools/make-icon.ps1`) |
 | **Website** | Landing page with the interactive split-view demo, features, shortcuts and install steps | `docs/index.html` (GitHub Pages from `main` `/docs`) |
 
-## Known gaps (not built yet)
+## Planned features
 
-These were listed as next candidates, but nothing has been decided:
-- Drag and drop of files
-- Status bar (line and column, words, encoding, line endings)
-- Recent files, and reopening closed tabs
-- Go to line, and a heading outline
-- Pasting images
-- GitHub alerts, YAML front matter, emoji and math (Markdig supports all four through `UseAlertBlocks`, `UseYamlFrontMatter`, `UseEmojiAndSmiley` and `UseMathematics`)
-- A global unhandled-exception handler
-- Accessible names on icon-only buttons
-- Code signing and a CI release workflow
+Everything not built yet is planned as tasks in the **Roadmap** section of `PLAN.md`: milestones 8–13, with sizes and "done when" checks. When a task ships, add its feature to the table above and tick it off in PLAN.md.
