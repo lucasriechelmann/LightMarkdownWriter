@@ -2,11 +2,19 @@
 # tests, the portable exe, the installer, SHA256SUMS.txt, build provenance attestations, and a DRAFT GitHub
 # release with all three files. Review the notes on GitHub, then publish the draft; the website's
 # /releases/latest/download/... links only follow published releases.
+#
+# The tag decides the version: it's stamped into the csproj on the runner, so a forgotten <Version> bump
+# only gives a warning. To rebuild an existing tag (without moving it): Actions → Release → Run workflow.
 name: Release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build, e.g. v1.2.0'
+        required: true
 
 permissions:
   contents: write      # create the release
@@ -17,20 +25,30 @@ jobs:
   release:
     runs-on: windows-latest
     env:
-      TAG: ${{ github.ref_name }}   # via env, never pasted into scripts
+      TAG: ${{ inputs.tag || github.ref_name }}   # via env, never pasted into scripts
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}  # a manual run builds the tagged commit, not main
 
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
 
-      - name: Check the tag matches <Version>
+      - name: Take the version from the tag
         shell: pwsh
         run: |
-          $version = ([xml](Get-Content src/LightMarkdownWriter/LightMarkdownWriter.csproj)).Project.PropertyGroup.Version |
-                     Where-Object { $_ } | Select-Object -First 1
-          if ("v$version" -ne $env:TAG) { throw "Tag $env:TAG doesn't match <Version>$version</Version> in the csproj." }
+          if ($env:TAG -notmatch '^v(\d+\.\d+\.\d+)$') { throw "Tag '$env:TAG' isn't vMAJOR.MINOR.PATCH." }
+          $version = $Matches[1]
+          $project = 'src/LightMarkdownWriter/LightMarkdownWriter.csproj'
+          $xml = [xml](Get-Content $project -Raw)
+          $node = $xml.SelectSingleNode('/Project/PropertyGroup/Version')
+          if ($node.InnerText -ne $version) {
+            Write-Output "::warning::<Version> in the csproj is $($node.InnerText); building $version from the tag. Bump it in the repo too."
+            $node.InnerText = $version
+            $xml.Save((Resolve-Path $project))  # the runner's copy only; the app and the installer both read it
+          }
+          "Building $version"
 
       - name: Test
         run: dotnet test -c Release

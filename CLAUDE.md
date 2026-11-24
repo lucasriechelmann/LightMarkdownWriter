@@ -16,7 +16,7 @@ A light markdown editor for Windows with a live, GitHub-style preview. It's desi
 | `docs/` | GitHub Pages site (`index.html`, favicon, README screenshot). Served from `main` `/docs`. |
 | `tools/make-icon.ps1` | Regenerates `src/LightMarkdownWriter/Assets/app.ico` and the 16–256 px sizes. |
 | `installer/` | Inno Setup 6 script and `build-installer.ps1`, for a per-user installer with .NET bundled. |
-| `.github/workflows/release.yml` | Builds a **draft** GitHub release (tests, both exes, SHA256SUMS, attestations) when a `v*` tag is pushed. Not yet run once. |
+| `.github/workflows/release.yml` | Builds a **draft** GitHub release (tests, both exes, SHA256SUMS, attestations) when a `v*` tag is pushed. First tag run (v1.2.0) stopped at the version check; see PLAN 13.1. |
 | `PLAN.md` | **Design log.** The original plan plus the reasons behind non-obvious decisions. Keep it, and add new decisions to it. |
 
 Inside the app project:
@@ -50,7 +50,7 @@ dotnet run --project src/LightMarkdownWriter -- file.md   # --theme=light|dark|s
 
 **Verifying a change:** `dotnet test` must pass. UI changes are checked in the running app.
 
-**Release, with the workflow** (13.1; its first run is still pending): bump `<Version>`, commit and push, then `git tag -a vX.Y.Z -m "vX.Y.Z"` and `git push origin vX.Y.Z`. The workflow checks the tag matches `<Version>` and creates a **draft** release; smoke-test the downloaded files, edit the notes, then publish the draft. If the workflow fails, use the manual steps.
+**Release, with the workflow** (13.1; its first run is still pending): bump `<Version>`, commit and push, then `git tag -a vX.Y.Z -m "vX.Y.Z"` and `git push origin vX.Y.Z`. The tag sets the version (stamped into the csproj on the runner; a forgotten bump only warns), and the workflow creates a **draft** release. To rebuild an existing tag without moving it: Actions → Release → Run workflow (or `gh workflow run release.yml -f tag=vX.Y.Z`); smoke-test the downloaded files, edit the notes, then publish the draft. If the workflow fails, use the manual steps.
 
 **Release by hand** (fallback):
 1. Bump `<Version>` in `src/LightMarkdownWriter/LightMarkdownWriter.csproj`, then commit and push.
