@@ -20,7 +20,10 @@ public partial class MainWindow : FluentWindow
     private ViewMode _appliedMode = ViewMode.Split;
     private double _editorShare = 0.5; // remembered split position
     private bool _closeConfirmed;
-    private readonly bool _followSystemTheme;
+    private readonly AppSettings _settings;
+    private AppTheme? _themeOverride; // --theme on the command line wins until the user changes the setting
+    private bool _watchingSystemTheme;
+    private Views.SettingsWindow? _settingsWindow;
 
     // Scroll sync state
     private long _ignoreEditorScrollUntil;            // set when we scroll the editor on the preview's behalf
@@ -31,12 +34,16 @@ public partial class MainWindow : FluentWindow
     private readonly DispatcherTimer _sessionTimer;
     private bool _positionSaveQueued;
 
-    public MainWindow(MainViewModel viewModel, bool followSystemTheme = true, Session? session = null)
+    public MainWindow(MainViewModel viewModel, AppSettings settings, AppTheme? themeOverride = null, Session? session = null)
     {
         _viewModel = viewModel;
-        _followSystemTheme = followSystemTheme;
+        _settings = settings;
+        _themeOverride = themeOverride;
         DataContext = viewModel;
         InitializeComponent();
+
+        ApplyEditorSettings();
+        settings.PropertyChanged += OnSettingsChanged;
 
         RestorePlacement(session);
         _sessionTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(2) };
@@ -79,6 +86,69 @@ public partial class MainWindow : FluentWindow
         SetUpEditing();
         SetUpExport();
     }
+
+    // ---------- Settings ----------
+
+    private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(AppSettings.Theme))
+        {
+            _themeOverride = null; // an explicit choice in Settings replaces --theme
+            ApplyThemeSetting();
+        }
+        else
+        {
+            ApplyEditorSettings();
+        }
+    }
+
+    private void ApplyEditorSettings()
+    {
+        Editor.FontFamily = new System.Windows.Media.FontFamily($"{_settings.FontFamily}, Cascadia Mono, Consolas");
+        Editor.FontSize = _settings.FontSize;
+        Editor.WordWrap = _settings.WordWrap;
+        Editor.HorizontalScrollBarVisibility = _settings.WordWrap ? System.Windows.Controls.ScrollBarVisibility.Disabled
+                                                                   : System.Windows.Controls.ScrollBarVisibility.Auto;
+        Editor.ShowLineNumbers = _settings.ShowLineNumbers;
+    }
+
+    /// <summary>System: follow Windows (and its changes) live. Light/Dark: fixed. Mica is kept either way.</summary>
+    private void ApplyThemeSetting()
+    {
+        var theme = _themeOverride ?? _settings.Theme;
+        if (theme == AppTheme.System)
+        {
+            ApplicationThemeManager.ApplySystemTheme();
+            if (!_watchingSystemTheme)
+            {
+                SystemThemeWatcher.Watch(this, WindowBackdropType.Mica, updateAccents: true);
+                _watchingSystemTheme = true;
+            }
+        }
+        else
+        {
+            if (_watchingSystemTheme)
+            {
+                SystemThemeWatcher.UnWatch(this);
+                _watchingSystemTheme = false;
+            }
+            ApplicationThemeManager.Apply(theme == AppTheme.Dark ? ApplicationTheme.Dark : ApplicationTheme.Light,
+                                          WindowBackdropType.Mica, updateAccent: true);
+        }
+    }
+
+    private void OpenSettings()
+    {
+        if (_settingsWindow is { IsLoaded: true })
+        {
+            _settingsWindow.Activate();
+            return;
+        }
+        _settingsWindow = new Views.SettingsWindow(_settings) { Owner = this };
+        _settingsWindow.Show();
+    }
+
+    private void OnSettingsClick(object sender, RoutedEventArgs e) => OpenSettings();
 
     // ---------- Editing: formatting shortcuts, list continuation, find/replace ----------
 
@@ -153,6 +223,7 @@ public partial class MainWindow : FluentWindow
         AddKeyBinding(InputBindings, Key.E, ModifierKeys.Control | ModifierKeys.Shift, () => _ = ExportAsync(ExportKind.Html));
         AddKeyBinding(InputBindings, Key.P, ModifierKeys.Control, () => _ = ExportAsync(ExportKind.Pdf));
         AddKeyBinding(InputBindings, Key.C, ModifierKeys.Control | ModifierKeys.Shift, () => _ = ExportAsync(ExportKind.Clipboard));
+        AddKeyBinding(InputBindings, Key.OemComma, ModifierKeys.Control, OpenSettings);
     }
 
     private void OnExportClick(object sender, RoutedEventArgs e)
@@ -246,9 +317,7 @@ public partial class MainWindow : FluentWindow
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        // Follow Windows light/dark + accent changes live, keeping the Mica backdrop (unless forced via --theme).
-        if (_followSystemTheme)
-            SystemThemeWatcher.Watch(this, WindowBackdropType.Mica, updateAccents: true);
+        ApplyThemeSetting();
         ApplyPreviewTheme(ApplicationThemeManager.GetAppTheme());
 
         WatchDocument(_viewModel.ActiveDocument);

@@ -6,11 +6,23 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
+    <Product>LightMarkdownWriter</Product>
+    <Description>A light markdown editor with live preview.</Description>
+    <Copyright>MIT License</Copyright>
+    <!-- English only: skips dozens of localized satellite assemblies from dependencies. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Served to WebView2 from disk via a virtual host (https://app.local/). -->
-    <Content Include="Assets\Preview\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Window / title bar icon (the exe icon comes from ApplicationIcon). -->
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Preview page + libraries, embedded and served to WebView2 as https://app.local/ (see PreviewAssets). -->
+    <EmbeddedResource Include="Assets\Preview\**" LogicalName="Preview/%(RecursiveDir)%(Filename)%(Extension)" />
     <EmbeddedResource Include="Editing\Markdown.xshd" />
   </ItemGroup>
 

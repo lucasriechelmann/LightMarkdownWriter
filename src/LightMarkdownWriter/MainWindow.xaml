@@ -11,6 +11,7 @@
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=vm:MainViewModel}"
                  Title="{Binding WindowTitle}"
+                 Icon="pack://application:,,,/Assets/app.ico"
                  Width="1200" Height="760" MinWidth="560" MinHeight="320"
                  WindowStartupLocation="CenterScreen"
                  ExtendsContentIntoTitleBar="True"
@@ -44,7 +45,11 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0" Title="{Binding WindowTitle}" />
+        <ui:TitleBar Grid.Row="0" Title="{Binding WindowTitle}">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Source="pack://application:,,,/Assets/app.ico" />
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
 
         <!-- Command bar -->
         <Grid Grid.Row="1" Margin="8,0,8,4">
@@ -116,6 +121,8 @@
                         <Setter Property="Margin" Value="2,0,0,0" />
                     </Style>
                 </StackPanel.Resources>
+                <ui:Button Icon="{ui:SymbolIcon Settings24}" ToolTip="Settings (Ctrl+,)" Click="OnSettingsClick"
+                           Appearance="Transparent" BorderThickness="0" Padding="8,6" Margin="0,0,6,0" />
                 <RadioButton ToolTip="Editor only (Ctrl+1)"
                              IsChecked="{Binding ViewMode, Converter={StaticResource EnumEquals}, ConverterParameter={x:Static vm:ViewMode.Editor}}">
                     <ui:SymbolIcon Symbol="DocumentEdit20" />

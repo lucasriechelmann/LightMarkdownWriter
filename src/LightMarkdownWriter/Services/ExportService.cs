@@ -133,6 +133,16 @@ public static partial class ExportService
     /// </summary>
     public static void CopyHtmlToClipboard(string fragmentHtml, string plainText)
     {
+        // Hand WPF raw bytes (a stream) so it doesn't re-encode the string and break the offsets.
+        var data = new DataObject();
+        data.SetData(DataFormats.Html, new MemoryStream(BuildCfHtml(fragmentHtml)));
+        data.SetData(DataFormats.UnicodeText, plainText);
+        Clipboard.SetDataObject(data, copy: true);
+    }
+
+    /// <summary>The CF_HTML payload: header with UTF-8 byte offsets, the fragment wrapped in a minimal document, NUL-terminated.</summary>
+    public static byte[] BuildCfHtml(string fragmentHtml)
+    {
         const string headerFormat = "Version:0.9\r\nStartHTML:{0:D10}\r\nEndHTML:{1:D10}\r\nStartFragment:{2:D10}\r\nEndFragment:{3:D10}\r\n";
         const string prefix = "<html><head><meta charset=\"utf-8\"></head><body><!--StartFragment-->";
         const string suffix = "<!--EndFragment--></body></html>";
@@ -145,18 +155,12 @@ public static partial class ExportService
         var cfHtml = string.Format(CultureInfo.InvariantCulture, headerFormat, startHtml, endHtml, startFragment, endFragment)
                      + prefix + fragmentHtml + suffix;
 
-        // Hand WPF raw bytes (a stream) so it doesn't re-encode the string and break the offsets.
-        var bytes = Utf8NoBom.GetBytes(cfHtml + "\0");
-        var data = new DataObject();
-        data.SetData(DataFormats.Html, new MemoryStream(bytes));
-        data.SetData(DataFormats.UnicodeText, plainText);
-        Clipboard.SetDataObject(data, copy: true);
+        return Utf8NoBom.GetBytes(cfHtml + "\0");
     }
 
     // ---------- Helpers ----------
 
-    private static string ReadAsset(params string[] parts) =>
-        File.ReadAllText(Path.Combine([AppContext.BaseDirectory, "Assets", "Preview", .. parts]));
+    private static string ReadAsset(params string[] parts) => PreviewAssets.ReadText(string.Join('/', parts));
 
     [GeneratedRegex(@"(?<before><img\b[^>]*?\bsrc="")(?<src>[^""]*)(?<after>"")", RegexOptions.IgnoreCase)]
     private static partial Regex ImgSrc();

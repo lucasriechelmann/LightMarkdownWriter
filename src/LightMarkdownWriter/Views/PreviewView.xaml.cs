@@ -55,12 +55,11 @@ public partial class PreviewView : UserControl
         core.Settings.AreBrowserAcceleratorKeysEnabled = false;
         core.Profile.PreferredColorScheme = _dark ? CoreWebView2PreferredColorScheme.Dark : CoreWebView2PreferredColorScheme.Light;
 
-        core.SetVirtualHostNameToFolderMapping(
-            AppHost, Path.Combine(AppContext.BaseDirectory, "Assets", "Preview"),
-            CoreWebView2HostResourceAccessKind.Allow);
-
-        // Document files are served by hand rather than a folder mapping: mappings only take effect on the
-        // next page load, but the active document's folder changes whenever the user switches tabs.
+        // Both hosts are served by hand:
+        //  - app.local: the page and libraries, embedded in the exe (single-file publish needs no Assets folder).
+        //  - doc.local: the active document's folder. A folder mapping wouldn't do, since mappings only take
+        //    effect on the next page load, but the folder changes whenever the user switches tabs.
+        core.AddWebResourceRequestedFilter($"https://{AppHost}/*", CoreWebView2WebResourceContext.All);
         core.AddWebResourceRequestedFilter($"https://{DocHost}/*", CoreWebView2WebResourceContext.All);
         core.WebResourceRequested += OnWebResourceRequested;
 
@@ -136,7 +135,22 @@ public partial class PreviewView : UserControl
     private void OnWebResourceRequested(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
     {
         var env = WebView.CoreWebView2.Environment;
-        var path = Uri.TryCreate(e.Request.Uri, UriKind.Absolute, out var uri) ? ResolveDocumentPath(uri) : null;
+        if (!Uri.TryCreate(e.Request.Uri, UriKind.Absolute, out var uri))
+        {
+            e.Response = env.CreateWebResourceResponse(null, 400, "Bad Request", "");
+            return;
+        }
+
+        if (uri.Host.Equals(AppHost, StringComparison.OrdinalIgnoreCase))
+        {
+            var asset = Uri.UnescapeDataString(uri.AbsolutePath);
+            e.Response = LightMarkdownWriter.Services.PreviewAssets.Open(asset) is { } stream
+                ? env.CreateWebResourceResponse(stream, 200, "OK", $"Content-Type: {ContentTypeFor(asset)}")
+                : env.CreateWebResourceResponse(null, 404, "Not Found", "");
+            return;
+        }
+
+        var path = ResolveDocumentPath(uri);
         if (path is null)
         {
             e.Response = env.CreateWebResourceResponse(null, 404, "Not Found", "");

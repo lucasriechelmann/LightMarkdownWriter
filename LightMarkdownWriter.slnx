@@ -2,4 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/LightMarkdownWriter/LightMarkdownWriter.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LightMarkdownWriter.Tests/LightMarkdownWriter.Tests.csproj" />
+  </Folder>
 </Solution>

@@ -25,25 +25,31 @@ public partial class App : Application
             return;
         }
 
-        var forcedTheme = e.Args
+        // --theme=light|dark overrides the saved setting for this run (until changed in Settings).
+        var themeOverride = e.Args
             .Select(a => a.ToLowerInvariant())
             .FirstOrDefault(a => a.StartsWith("--theme=", StringComparison.Ordinal))?["--theme=".Length..] switch
         {
-            "light" => ApplicationTheme.Light,
-            "dark" => ApplicationTheme.Dark,
-            _ => (ApplicationTheme?)null,
+            "light" => AppTheme.Light,
+            "dark" => AppTheme.Dark,
+            "system" => AppTheme.System,
+            _ => (AppTheme?)null,
         };
 
+        var settings = new SettingsService().Load();
+
         // Apply the theme before the first frame to avoid a white flash in dark mode.
-        if (forcedTheme is { } theme)
-            ApplicationThemeManager.Apply(theme, WindowBackdropType.Mica, updateAccent: true);
-        else
-            ApplicationThemeManager.ApplySystemTheme();
+        switch (themeOverride ?? settings.Theme)
+        {
+            case AppTheme.Light: ApplicationThemeManager.Apply(ApplicationTheme.Light, WindowBackdropType.Mica, updateAccent: true); break;
+            case AppTheme.Dark: ApplicationThemeManager.Apply(ApplicationTheme.Dark, WindowBackdropType.Mica, updateAccent: true); break;
+            default: ApplicationThemeManager.ApplySystemTheme(); break;
+        }
 
         var sessionService = new SessionService();
         var session = sessionService.Load();
         var viewModel = new MainViewModel(new DialogService(), files, sessionService, session);
-        var window = new MainWindow(viewModel, followSystemTheme: forcedTheme is null, session);
+        var window = new MainWindow(viewModel, settings, themeOverride, session);
         MainWindow = window;
         window.Show();
 

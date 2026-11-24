@@ -111,12 +111,35 @@ LightMarkdownWriter/
 ### Keyboard focus in the preview
 - The WebView2 is a native child window, so the window's `InputBindings` never see keys while it has focus. The control forwards accelerator keys as a `KeyDown` on itself, and `MainWindow` matches those against its own `KeyBinding`s. Browser accelerators such as F5, Ctrl+R and Ctrl+P are disabled.
 
-### Packaging
-- Build command: `dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true`
-- Needs the .NET 10 Desktop Runtime. The WebView2 runtime is already part of Windows 11.
-- A Settings option, "Register for .md files", writes the HKCU ProgId and OpenWithProgids entries (no admin rights needed). Windows 11 won't let an app set itself as the default, so the app then opens the Settings → Default apps page.
+### Settings
+- A separate Settings window (Ctrl+, or the gear button) in Windows 11 Settings-page style, built from CardControls.
+  - It's its own top-level window rather than an overlay dialog, so the preview's native window can't cover it.
+- Bound directly to `AppSettings` (theme, font, font size, word wrap, line numbers). Every change applies live and is saved to `settings.json`.
+- Theme: System follows Windows live through `SystemThemeWatcher`; Light and Dark are fixed. `--theme=` overrides it for the run until the user changes it in Settings.
+- The font list shows installed monospaced fonts, detected by comparing the advance widths of 'i' and 'W'.
 
-## Milestones
+### Packaging
+- `dotnet publish src/LightMarkdownWriter -p:PublishProfile=win-x64` produces `artifacts/publish/LightMarkdownWriter.exe`. It's one file, about 15 MB, framework-dependent and ReadyToRun-compiled.
+  - The preview assets are embedded resources (`LogicalName="Preview/..."`) served to WebView2 by the `WebResourceRequested` handler, so no `Assets` folder is needed.
+  - `WebView2Loader.dll` is bundled via `IncludeNativeLibrariesForSelfExtract`.
+- Requirements: the .NET 10 Desktop Runtime. The WebView2 runtime is part of Windows 11.
+- File association (Settings → Files) writes only under HKCU, so no admin rights are needed:
+  - the ProgId with icon and open command,
+  - `OpenWithProgids` for .md and .markdown,
+  - `Applications\LightMarkdownWriter.exe`,
+  - Capabilities plus `RegisteredApplications`, so the app shows up in Default apps.
+  - Afterwards it calls `SHChangeNotify`. Windows 11 won't let an app make itself the default, so a button opens `ms-settings:defaultapps?registeredAppUser=LightMarkdownWriter`.
+- The app icon is a generated multi-size ICO (`Assets/app.ico`), used for the exe, window, title bar and the registered file type.
+
+### Tests
+- `tests/LightMarkdownWriter.Tests` (xUnit) covers:
+  - file association, against a throwaway HKCU key that's deleted afterwards,
+  - CF_HTML byte offsets,
+  - embedding local images,
+  - BOM preservation through session restore,
+  - the `data-line` source markers.
+
+## Milestones (all done)
 
 1. **Skeleton** — solution, FluentWindow with Mica, tab strip, AvalonEdit in a tab, open/save/new.
 2. **Preview** — WebView2 and Markdig, debounced live render, GFM, highlight.js, Mermaid, GitHub CSS, view-mode toggles.
