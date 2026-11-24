@@ -210,4 +210,113 @@ public static partial class MarkdownFormatting
         editor.CaretOffset = caret + insert.Length;
         return true;
     }
+
+    /// <summary>
+    /// Tab / Shift+Tab on list items: see <see cref="ShiftListItems(TextDocument, int, int, bool)"/>.
+    /// Returns false when the caret or selection isn't on list lines, so the editor's normal Tab runs.
+    /// </summary>
+    public static bool ShiftListItems(TextEditor editor, bool outdent)
+    {
+        if (editor.Document is not { } doc) return false;
+        if (ShiftListItems(doc, editor.SelectionStart, editor.SelectionLength, outdent) is not { } selection) return false;
+        editor.Select(selection.Start, selection.Length);
+        return true;
+    }
+
+    /// <summary>
+    /// Indents (or outdents) the list items on the selected lines by one nesting level, as one undo step.
+    /// <list type="bullet">
+    /// <item>Indent: to the content column of the item above at the same level ("- " → 2 spaces, "10. " → 4),
+    /// which is what makes markdown nest it; the first item of a level uses its own marker width.</item>
+    /// <item>Outdent: back to the indent of the parent item (the nearest item above with less indent), or 0.</item>
+    /// <item>A tab-indented item moves by one tab. With several lines, the shallowest one sets the step and every
+    /// line moves by the same amount, so nested children keep their shape.</item>
+    /// </list>
+    /// Applies only when every non-blank line in range is a list item; returns the new selection, or null.
+    /// </summary>
+    public static (int Start, int Length)? ShiftListItems(TextDocument doc, int selectionStart, int selectionLength, bool outdent)
+    {
+        var first = doc.GetLineByOffset(selectionStart);
+        var selectionEnd = selectionStart + selectionLength;
+        var last = doc.GetLineByOffset(selectionEnd);
+        if (selectionLength > 0 && last.Offset == selectionEnd && last.LineNumber > first.LineNumber)
+            last = last.PreviousLine; // selection ends at the start of a line: don't include that line
+
+        var items = new List<(DocumentLine Line, Match Item)>();
+        for (var line = first; line is not null && line.LineNumber <= last.LineNumber; line = line.NextLine)
+        {
+            var text = doc.GetText(line);
+            if (text.Trim().Length == 0) continue;
+            var item = ListItemPrefix().Match(text);
+            if (!item.Success) return null;
+            items.Add((line, item));
+        }
+        if (items.Count == 0) return null;
+
+        var (baseLine, baseItem) = items.MinBy(i => i.Item.Groups["indent"].Length);
+        var indent = baseItem.Groups["indent"].Value;
+        var usesTabs = indent.Contains('\t');
+
+        string add = "";
+        var remove = 0;
+        if (!outdent)
+        {
+            add = usesTabs ? "\t" : new string(' ', ContentColumn(SiblingAbove(doc, baseLine, indent.Length) ?? baseItem) - indent.Length);
+        }
+        else if (indent.Length > 0)
+        {
+            remove = usesTabs ? 1 : indent.Length - (ParentAbove(doc, baseLine, indent.Length)?.Groups["indent"].Length ?? 0);
+        }
+
+        // Anchors keep the selection on the same text: its start stays before inserted indentation when it sits at
+        // a line start (so the new indent is selected too), its end and a bare caret move along with the text.
+        var startAnchor = doc.CreateAnchor(selectionStart);
+        startAnchor.MovementType = selectionLength > 0 ? AnchorMovementType.BeforeInsertion : AnchorMovementType.AfterInsertion;
+        var endAnchor = doc.CreateAnchor(selectionEnd);
+        endAnchor.MovementType = AnchorMovementType.AfterInsertion;
+
+        using (doc.RunUpdate())
+        {
+            foreach (var (line, item) in items)
+            {
+                if (add.Length > 0)
+                    doc.Insert(line.Offset, add);
+                else if (remove > 0)
+                    doc.Remove(line.Offset, Math.Min(remove, item.Groups["indent"].Length));
+            }
+        }
+        return (startAnchor.Offset, Math.Max(0, endAnchor.Offset - startAnchor.Offset));
+    }
+
+    /// <summary>The column an item's text starts at, e.g. 2 for "- x", 5 for "  1. x" (task boxes not counted).</summary>
+    private static int ContentColumn(Match item) =>
+        item.Groups["space"].Index + item.Groups["space"].Length;
+
+    /// <summary>The nearest list item above at exactly <paramref name="indent"/>, stopping at its parent or the list's end.</summary>
+    private static Match? SiblingAbove(TextDocument doc, DocumentLine line, int indent)
+    {
+        foreach (var item in ItemsAbove(doc, line))
+        {
+            var itemIndent = item.Groups["indent"].Length;
+            if (itemIndent == indent) return item;
+            if (itemIndent < indent) return null; // reached the parent: this is the first child
+        }
+        return null;
+    }
+
+    /// <summary>The nearest list item above with less indent than <paramref name="indent"/>.</summary>
+    private static Match? ParentAbove(TextDocument doc, DocumentLine line, int indent) =>
+        ItemsAbove(doc, line).FirstOrDefault(item => item.Groups["indent"].Length < indent);
+
+    /// <summary>List items above a line, nearest first. Blank and indented continuation lines are skipped; an
+    /// unindented non-list line ends the list.</summary>
+    private static IEnumerable<Match> ItemsAbove(TextDocument doc, DocumentLine line)
+    {
+        for (var previous = line.PreviousLine; previous is not null; previous = previous.PreviousLine)
+        {
+            var text = doc.GetText(previous);
+            if (ListItemPrefix().Match(text) is { Success: true } item) yield return item;
+            else if (text.Length > 0 && !char.IsWhiteSpace(text[0])) yield break;
+        }
+    }
 }

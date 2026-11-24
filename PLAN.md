@@ -262,10 +262,18 @@ The gaps you notice in the first hour of use, plus the safety net for the "never
   - **Outcome:** checked in the app; the clipboard held the exact code text.
 ### Milestone 11: Editing comfort
 
-- [ ] **11.1 Indent and outdent list items** (S, `MarkdownFormatting`)
+- [x] **11.1 Indent and outdent list items** (S, `MarkdownFormatting`)
   - Tab and Shift+Tab on a list line (or on selected list lines) indent or outdent by the list's own indent unit.
   - Elsewhere, Tab keeps AvalonEdit's normal behaviour.
   - *Done when:* nested bullets, numbered lists and tasks work, with unit tests.
+  - **Outcome:** checked in the app (nest, double nest, Shift+Tab back, and a plain line still gets a normal tab), plus 18 unit tests.
+  - **How it works** (`MarkdownFormatting.ShiftListItems`, called from the editor's `PreviewKeyDown`):
+    - **Indent step:** markdown nests an item when it starts at the *content column* of the item above, so the step is that sibling's marker width: `- ` → 2, `1. ` → 3, `10. ` → 4. The first item of a level uses its own marker width. Tab-indented lists move by one tab.
+    - **Outdent:** back to the parent item's indent (the nearest item above with less indent), or 0.
+    - **Selections:** applies only when every non-blank selected line is a list item. The shallowest line sets the step and every line moves by the same amount, so children keep their shape. One undo step.
+    - **Decision:** on a list line, Tab nests the item wherever the caret is (like VS Code and GitHub's editor), so a literal tab can't be typed mid-item. That's rarely wanted in markdown.
+    - **Not done:** numbered items keep their number when nested (`2.` under `1.` stays `2.`, and renders as a sub-list starting at 2). Renumbering could be added later.
+    - The logic takes a `TextDocument`, not a `TextEditor`, so it's unit-testable without a UI thread; text anchors keep the caret and selection on the same text.
 - [ ] **11.2 Auto-close pairs** (S, `MarkdownFormatting`, Settings toggle)
   - Typing `(`, `[`, `` ` `` or `"` with text selected wraps the selection. With nothing selected, it inserts the closing character, and typing that character steps over it.
   - It can be turned off in Settings.

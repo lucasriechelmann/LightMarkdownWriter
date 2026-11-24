@@ -7,7 +7,7 @@ Each feature, in user terms, with the code that owns it. Folder-level ownership 
 | **Tabs and files** | New, open, save, save as, close (prompts if unsaved), Ctrl+Tab, middle-click close; an unsaved dot on the tab and in the title | `ViewModels/` (entry: `MainViewModel` commands), `Services/DialogService.cs` |
 | **Editor** | AvalonEdit with line numbers and word wrap, Cascadia Mono, accent-coloured links | `MainWindow.xaml` (`Editor`), `MainWindow.xaml.cs` (`ApplyEditorSettings`) |
 | **Syntax colours** | Markdown highlighting in a light or dark palette | `Editing/` (`Markdown.xshd`, `MarkdownHighlighting.cs`) |
-| **Formatting and lists** | Ctrl+B / I / E / K, Ctrl+Shift+K, command-bar buttons; Enter continues lists, tasks and quotes | `Editing/MarkdownFormatting.cs`, wired in `MainWindow.SetUpEditing` |
+| **Formatting and lists** | Ctrl+B / I / E / K, Ctrl+Shift+K, command-bar buttons; Enter continues lists, tasks and quotes; Tab / Shift+Tab nest and un-nest list items | `Editing/MarkdownFormatting.cs`, wired in `MainWindow.SetUpEditing` |
 | **Find and replace** | Ctrl+F / H, F3; match case, whole word and regex (Alt+C / W / R); highlights all matches; replace all as one undo step | `Views/FindReplaceBar.*`, `Editing/SearchResultRenderer.cs` |
 | **Live preview** | GFM, highlight.js, Mermaid, relative images, `.md` links open as tabs, external links open in the browser | `Services/MarkdownRenderer.cs`, `Views/PreviewView.*`, `Assets/Preview/` |
 | **GitHub alerts** | `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` and `[!CAUTION]` styled like GitHub in the preview, exports and clipboard | `MarkdownRenderer` (via `UseAdvancedExtensions`), `preview.css`/`export.css`, `preview.js` (`inlineStyles`) |

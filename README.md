@@ -24,7 +24,7 @@ A light, fast markdown editor for Windows 11 with a live, GitHub-style preview.
 - **Editing helpers:**
   - markdown syntax colours
   - bold/italic/code/link/code-block shortcuts
-  - lists continue on Enter
+  - lists continue on Enter, and Tab / Shift+Tab nest and un-nest list items
   - find & replace with regex
   - drag files in to open them, or drag images in to insert links
 - **Status bar** with line and column, word count, line endings and encoding. Click the last two to convert, for example CRLF ↔ LF or adding/removing the UTF-8 BOM.
@@ -57,6 +57,7 @@ There are two downloads on each [release](https://github.com/lucasriechelmann/Li
 | Go to line / outline | Ctrl+G / Ctrl+Shift+O |
 | Bold / Italic / Inline code | Ctrl+B / Ctrl+I / Ctrl+E |
 | Link / Code block | Ctrl+K / Ctrl+Shift+K |
+| Nest / un-nest a list item | Tab / Shift+Tab (on a list line) |
 | Find / Replace | Ctrl+F / Ctrl+H |
 | Next / previous match | F3 / Shift+F3 (Enter / Shift+Enter in the find box) |
 | Match case / whole word / regex | Alt+C / Alt+W / Alt+R (in the find box) |

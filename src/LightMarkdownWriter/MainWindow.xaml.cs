@@ -361,6 +361,9 @@ public partial class MainWindow : FluentWindow
         {
             if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.None)
                 e.Handled = MarkdownFormatting.ContinueListOnEnter(Editor);
+            else if (e.Key == Key.Tab && Keyboard.Modifiers is ModifierKeys.None or ModifierKeys.Shift)
+                // On list lines Tab/Shift+Tab nest and un-nest items; elsewhere AvalonEdit's own Tab runs.
+                e.Handled = MarkdownFormatting.ShiftListItems(Editor, outdent: Keyboard.Modifiers == ModifierKeys.Shift);
             else if (e.Key == Key.Escape && FindBar.IsOpen)
             {
                 FindBar.Close();
