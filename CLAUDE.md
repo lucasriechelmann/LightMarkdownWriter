@@ -15,6 +15,7 @@ A light markdown editor for Windows with a live, GitHub-style preview. It's desi
 | `tests/LightMarkdownWriter.Tests/` | xUnit tests for non-UI logic. It references the app project and targets `net10.0-windows` with WPF. |
 | `docs/` | GitHub Pages site (`index.html`, favicon, README screenshot). Served from `main` `/docs`. |
 | `tools/make-icon.ps1` | Regenerates `src/LightMarkdownWriter/Assets/app.ico` and the 16–256 px sizes. |
+| `installer/` | Inno Setup 6 script and `build-installer.ps1`, for a per-user installer with .NET bundled. |
 | `PLAN.md` | **Design log.** The original plan plus the reasons behind non-obvious decisions. Keep it, and add new decisions to it. |
 
 Inside the app project:
@@ -50,13 +51,16 @@ dotnet run --project src/LightMarkdownWriter -- file.md   # --theme=light|dark|s
 
 **Release** (a manual process for now):
 1. Bump `<Version>` in `src/LightMarkdownWriter/LightMarkdownWriter.csproj`, then commit and push.
-2. Run `dotnet publish src/LightMarkdownWriter -p:PublishProfile=win-x64`. This produces `artifacts/publish/LightMarkdownWriter.exe`.
-3. Create `SHA256SUMS.txt` with the format `<sha256>  LightMarkdownWriter.exe`.
-4. Smoke-test the exe from an empty folder.
-5. Tag the commit the exe was built from: `git tag -a vX.Y.Z <commit>`. The exe's ProductVersion carries `+<commit>`.
-6. Push the tag, then run `gh release create vX.Y.Z <exe> SHA256SUMS.txt --notes-file ...`.
+2. **Portable exe:** run `dotnet publish src/LightMarkdownWriter -p:PublishProfile=win-x64`. This produces `artifacts/publish/LightMarkdownWriter.exe` (framework-dependent).
+3. **Installer:** run `./installer/build-installer.ps1`. It needs Inno Setup 6, and produces `artifacts/installer/LightMarkdownWriter-Setup.exe` (self-contained) plus `.sha256`.
+4. Create `SHA256SUMS.txt` covering both files, in the format `<sha256>  <file name>`.
+5. Smoke-test both: run the exe from an empty folder, then install, open a `.md` file and uninstall.
+6. Tag the commit the files were built from: `git tag -a vX.Y.Z <commit>`. The exe's ProductVersion carries `+<commit>`.
+7. Push the tag, then run `gh release create vX.Y.Z <portable exe> <setup exe> SHA256SUMS.txt --notes-file ...`.
 
-The site's download button uses `/releases/latest/download/LightMarkdownWriter.exe`, so the asset must keep that exact file name.
+The site links to `/releases/latest/download/LightMarkdownWriter-Setup.exe` (main button) and `.../LightMarkdownWriter.exe` (portable), so both assets must keep those exact file names.
+
+**Installer rules:** the installer's registry entries must mirror `Services/FileAssociationService.cs` (same keys and command format), so the in-app status stays right. Never change the `AppId` GUID in `installer/LightMarkdownWriter.iss`.
 
 **Git:** commit straight to `main` with Conventional Commits (`feat:`, `fix:`, `docs:`…). No Co-Authored-By trailers.
 

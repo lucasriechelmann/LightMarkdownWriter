@@ -50,6 +50,34 @@ public sealed class FileAssociationServiceTests : IDisposable
     }
 
     [Fact]
+    public void Register_makes_it_the_md_default_only_when_no_default_exists()
+    {
+        Service().Register();
+
+        Assert.Equal("LightMarkdownWriter.md", _root.OpenSubKey(@"Classes\.md")?.GetValue(""));
+        Assert.Equal("LightMarkdownWriter.md", _root.OpenSubKey(@"Classes\.markdown")?.GetValue(""));
+        Assert.True(Service().IsDefaultForMarkdown());
+
+        Service().Unregister();
+        Assert.Null(_root.OpenSubKey(@"Classes\.md")?.GetValue("")); // our default is removed again
+        Assert.False(Service().IsDefaultForMarkdown());
+    }
+
+    [Fact]
+    public void Register_never_takes_over_another_apps_default_and_unregister_leaves_it()
+    {
+        using (var md = _root.CreateSubKey(@"Classes\.md"))
+            md.SetValue("", "OtherEditor.md");
+
+        Service().Register();
+        Assert.Equal("OtherEditor.md", _root.OpenSubKey(@"Classes\.md")?.GetValue(""));
+        Assert.False(Service().IsDefaultForMarkdown());
+
+        Service().Unregister();
+        Assert.Equal("OtherEditor.md", _root.OpenSubKey(@"Classes\.md")?.GetValue(""));
+    }
+
+    [Fact]
     public void Unregister_when_never_registered_is_harmless()
     {
         Service().Unregister();

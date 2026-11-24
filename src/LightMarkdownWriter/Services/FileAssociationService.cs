@@ -22,8 +22,11 @@ public sealed class FileAssociationService
     private readonly string _exePath;
     private readonly bool _notifyShell;
 
+    private readonly bool _isRealRoot; // false in tests (scratch key): never read the real machine/user state
+
     public FileAssociationService(RegistryKey? softwareRoot = null, string? exePath = null, bool notifyShell = true)
     {
+        _isRealRoot = softwareRoot is null;
         _softwareRoot = softwareRoot ?? Registry.CurrentUser.CreateSubKey("Software");
         _exePath = exePath ?? Environment.ProcessPath ?? throw new InvalidOperationException("Unknown executable path.");
         _notifyShell = notifyShell;
@@ -56,11 +59,17 @@ public sealed class FileAssociationService
             command.SetValue("", OpenCommand);
         }
 
-        // "Open with" list for each extension, without touching the user's current default.
         foreach (var extension in Extensions)
         {
+            // "Open with" list entry.
             using var openWith = classes.CreateSubKey($@"{extension}\OpenWithProgids");
             openWith.SetValue(ProgId, Array.Empty<byte>(), RegistryValueKind.None);
+
+            // Default for double-click, but only when nothing else is the default: never take over another
+            // app's association. (A user's explicit choice in Windows — UserChoice — wins over this anyway.)
+            using var extensionKey = classes.CreateSubKey(extension);
+            if (string.IsNullOrEmpty(extensionKey.GetValue("") as string) && !HasMachineDefault(extension))
+                extensionKey.SetValue("", ProgId);
         }
 
         using (var application = classes.CreateSubKey($@"Applications\{ExeName}"))
@@ -98,6 +107,11 @@ public sealed class FileAssociationService
                 {
                     using var openWith = classes.OpenSubKey($@"{extension}\OpenWithProgids", writable: true);
                     openWith?.DeleteValue(ProgId, throwOnMissingValue: false);
+
+                    // Remove the default only if it's still ours.
+                    using var extensionKey = classes.OpenSubKey(extension, writable: true);
+                    if (extensionKey?.GetValue("") as string == ProgId)
+                        extensionKey.DeleteValue("", throwOnMissingValue: false);
                 }
             }
         }
@@ -108,6 +122,31 @@ public sealed class FileAssociationService
             registered?.DeleteValue(AppName, throwOnMissingValue: false);
 
         NotifyShell();
+    }
+
+    /// <summary>
+    /// True when double-clicking a .md file opens this app: either the user picked it in Windows (UserChoice),
+    /// or there's no UserChoice and the per-user default is our ProgId.
+    /// </summary>
+    public bool IsDefaultForMarkdown()
+    {
+        if (_isRealRoot)
+        {
+            using var choice = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.md\UserChoice");
+            if (choice?.GetValue("ProgId") is string chosen)
+                return chosen == ProgId || chosen.EndsWith(ExeName, StringComparison.OrdinalIgnoreCase);
+        }
+        using var extension = _softwareRoot.OpenSubKey(@"Classes\.md");
+        return extension?.GetValue("") as string == ProgId;
+    }
+
+    // In tests the root is a scratch key, so the machine-wide registry must not influence the result.
+    private bool HasMachineDefault(string extension)
+    {
+        if (!_isRealRoot) return false;
+        using var key = Registry.LocalMachine.OpenSubKey($@"Software\Classes\{extension}");
+        return !string.IsNullOrEmpty(key?.GetValue("") as string);
     }
 
     /// <summary>Opens this app's page in Settings → Default apps, where the user can make it the default.</summary>

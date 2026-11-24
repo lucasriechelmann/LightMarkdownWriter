@@ -69,6 +69,10 @@ public partial class App : Application
 
     private void InstallCrashHandlers()
     {
+        // Sign-out, shutdown, or an installer closing the app (Restart Manager): WPF ends the session without
+        // raising Window.Closing, so save explicitly here.
+        SessionEnding += (_, _) => _window?.PersistSessionNow();
+
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
         TaskScheduler.UnobservedTaskException += (_, e) =>

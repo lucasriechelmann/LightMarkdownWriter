@@ -269,11 +269,11 @@ footer {
         <h1>Write markdown. See it as you type.</h1>
         <p>A light editor for Windows 11 with a live GitHub-style preview, scroll sync, and tabs that come back exactly as you left them.</p>
         <div class="actions">
-            <a class="download" href="https://github.com/lucasriechelmann/LightMarkdownWriter/releases/latest/download/LightMarkdownWriter.exe">
+            <a class="download" href="https://github.com/lucasriechelmann/LightMarkdownWriter/releases/latest/download/LightMarkdownWriter-Setup.exe">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/></svg>
                 Download for Windows
             </a>
-            <small>Version 1.0.0, one 15 MB file.<br>Needs the <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 Desktop Runtime</a>.</small>
+            <small>Version 1.1.0 installer, everything included.<br>Prefer no install? Get the <a href="https://github.com/lucasriechelmann/LightMarkdownWriter/releases/latest/download/LightMarkdownWriter.exe">portable exe</a>.</small>
         </div>
     </div>
 
@@ -361,12 +361,12 @@ footer {
     <section id="install" class="wrap">
         <h2 class="section">Install</h2>
         <ol class="steps">
-            <li>Install the <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 Desktop Runtime</a> if you don't have it. The app tells you if it's missing.</li>
-            <li><a href="https://github.com/lucasriechelmann/LightMarkdownWriter/releases/latest/download/LightMarkdownWriter.exe">Download LightMarkdownWriter.exe</a> and put it in a folder you'll keep, such as <code>C:\Tools</code>.</li>
+            <li><a href="https://github.com/lucasriechelmann/LightMarkdownWriter/releases/latest/download/LightMarkdownWriter-Setup.exe">Download the installer</a>. It includes .NET, so there's nothing else to install, and it needs no admin rights.</li>
             <li>Run it. Windows may warn that the app isn't recognized, because it isn't code-signed: choose <em>More info</em>, then <em>Run anyway</em>.</li>
-            <li>To open .md files with it, go to <em>Settings</em> (<kbd>Ctrl+,</kbd>), then <em>Register</em>. To make it the default, use <em>Open Default apps</em> on the same page.</li>
+            <li>Keep <em>Open .md and .markdown files</em> ticked. If no other app opens .md files yet, double-clicking one now opens LightMarkdownWriter.</li>
+            <li>If another app already opens them, leave the last option ticked: Windows Settings opens on LightMarkdownWriter, and <em>Set default</em> switches it. Only you can change a default app in Windows.</li>
         </ol>
-        <p class="prose">Want to check the download? Each <a href="https://github.com/lucasriechelmann/LightMarkdownWriter/releases/latest">release</a> lists its SHA-256 checksum.</p>
+        <p class="prose">Works on Windows 10 1809 or later, and is designed for Windows 11. The <a href="https://github.com/lucasriechelmann/LightMarkdownWriter/releases/latest/download/LightMarkdownWriter.exe">portable exe</a> is a single 15 MB file you can run from anywhere; it needs the <a href="https://dotnet.microsoft.com/download/dotnet/10.0">.NET 10 Desktop Runtime</a>. Each <a href="https://github.com/lucasriechelmann/LightMarkdownWriter/releases/latest">release</a> lists SHA-256 checksums for both downloads.</p>
     </section>
 </main>
 

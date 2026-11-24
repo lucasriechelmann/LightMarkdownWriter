@@ -50,7 +50,10 @@ public partial class SettingsWindow : FluentWindow
         var state = _associations.GetState();
         AssociationStatus.Text = state switch
         {
-            AssociationState.Registered => "Registered: shown in \"Open with\" for .md and .markdown files.",
+            AssociationState.Registered when _associations.IsDefaultForMarkdown() =>
+                "Registered, and the default: double-clicking a .md file opens LightMarkdownWriter.",
+            AssociationState.Registered =>
+                "Registered in \"Open with\", but another app is the default. Use Open Default apps below to switch.",
             AssociationState.RegisteredElsewhere => "Registered for another copy of the app (it was moved?). Register again to use this one.",
             _ => "Not registered.",
         };

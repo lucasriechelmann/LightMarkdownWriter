@@ -310,7 +310,23 @@ The gaps you notice in the first hour of use, plus the safety net for the "never
   - Submit a manifest so `winget install LightMarkdownWriter` works.
   - Best done after 13.1 and 13.2, so updates are routine and the exe is signed.
   - *Done when:* the manifest is merged and `winget install` works on a clean machine.
-- [ ] **13.5 Website: Windows 10 note** (S, `docs/index.html`)
+- [x] **13.6 Installer** (M, `installer/`, `win-x64-installer.pubxml`). Added on request; it wasn't in the original list.
+  - Inno Setup 6 script (`installer/LightMarkdownWriter.iss`), built by `installer/build-installer.ps1`, giving `artifacts/installer/LightMarkdownWriter-Setup.exe` plus `.sha256`. The name has no version so the website can link to `/releases/latest/download/LightMarkdownWriter-Setup.exe`; the version is in the file properties.
+  - **Decisions** (from the developer):
+    - **Bundles .NET** (self-contained), so nothing else needs installing.
+    - **Per-user install**, no admin: `%LOCALAPPDATA%\Programs\LightMarkdownWriter`.
+    - **`.md` association is an optional task**, ticked by default.
+  - **Size and startup** (measured):
+    - The self-contained single-file exe is 180 MB uncompressed. With `EnableCompressionInSingleFile` it's 77 MB, with about 0.9 s to show a document (against 0.66 s for the framework-dependent exe). Compression was chosen.
+    - The setup exe is 71.6 MB. Inno's LZMA can't shrink an already-compressed bundle much.
+  - **Double-click on `.md`:**
+    - Setup and the app's Settings → Register set the `.md`/`.markdown` default *only when no other app is the default*. Uninstall removes it only if it's still ours.
+    - Windows doesn't let any installer override a user's existing choice. If another app owns `.md`, setup's last page offers `ms-settings:defaultapps?registeredAppUser=LightMarkdownWriter`, where the user clicks Set default.
+    - Settings shows whether the app really is the default (it reads `UserChoice`).
+  - **Uninstall** removes every association key (also ones created from Settings) but keeps `%LOCALAPPDATA%\LightMarkdownWriter`: tabs, settings and backups.
+  - **Upgrades:** setup closes a running copy with the Restart Manager. The app now saves its session on `Application.SessionEnding` (which is also how Windows shutdown and sign-out reach it), because WPF doesn't raise `Window.Closing` there.
+  - **Released in v1.1.0.** The website's main download button now points to the installer, with the portable exe as a secondary link.
+- [x] **13.5 Website: Windows 10 note** (S, `docs/index.html`). Done with the v1.1.0 site update, which also made the installer the main download.
   - Mention "Windows 10 1809 or later" in the install section, to match the README.
   - *Done when:* the live site says it.
 

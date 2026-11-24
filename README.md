@@ -30,11 +30,18 @@ A light, fast markdown editor for Windows 11 with a live, GitHub-style preview.
 - **Windows 11 look:** Mica, Fluent controls, and your Windows light/dark theme and accent colour.
 - **One small exe.** A single portable file, one window, and a second launch opens its files in the running window.
 
-## Requirements
+## Install
 
+There are two downloads on each [release](https://github.com/lucasriechelmann/LightMarkdownWriter/releases):
+
+| Download | What you get |
+|---|---|
+| `LightMarkdownWriter-Setup.exe` (installer) | .NET is included, so nothing else to install. It installs for your user only (no admin) and adds a Start-menu entry, an uninstaller, and an optional `.md` file association. |
+| `LightMarkdownWriter.exe` (portable) | One 15 MB file you can run from anywhere. Needs the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0). |
+
+**Requirements:**
 - Windows 10 1809 or later. Built and tested on Windows 11.
-- [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0).
-- Microsoft Edge WebView2 Runtime, which comes with Windows 11.
+- The Microsoft Edge WebView2 Runtime, which comes with Windows 11.
 
 ## Keyboard shortcuts
 
@@ -55,9 +62,18 @@ A light, fast markdown editor for Windows 11 with a live, GitHub-style preview.
 
 ## Opening .md files with it
 
-Go to **Settings (Ctrl+,) → Files → Register**. This adds LightMarkdownWriter to *Open with* for `.md` and `.markdown` files. It only touches your user account (HKCU) and needs no admin rights. If you move the exe, register again.
+The installer does this for you; keep its *Open .md and .markdown files* option ticked. With the portable exe, go to **Settings (Ctrl+,) → Files → Register**.
 
-Windows 11 lets only you choose default apps. To make it the default, use **Open Default apps** on the same page and pick LightMarkdownWriter for `.md`.
+Either way, LightMarkdownWriter is added to *Open with* for `.md` and `.markdown` files. If no other app is the default yet, double-clicking a `.md` file then opens it. This only touches your user account (HKCU) and needs no admin rights. If you move the portable exe, register again.
+
+**If another app already opens `.md` files**, for example Notepad++ or VS Code: Windows lets only you change a default app.
+- The installer's last page and the Settings page both offer **Open Default apps**, which goes straight to LightMarkdownWriter.
+- There, click **Set default** for `.md`.
+- The Settings page shows whether double-click currently opens LightMarkdownWriter.
+
+## Build the installer
+
+`./installer/build-installer.ps1` builds `artifacts/installer/LightMarkdownWriter-Setup.exe`; the version is in its file properties. It needs [Inno Setup 6](https://jrsoftware.org/isinfo.php).
 
 ## Build
 

@@ -118,13 +118,26 @@ Vendored web libraries live in `src/LightMarkdownWriter/Assets/Preview/vendor/`,
 
 ## Packaging
 
-The publish profile is `src/LightMarkdownWriter/Properties/PublishProfiles/win-x64.pubxml`. It's re-included by an exception in `.gitignore`, which otherwise ignores `*.pubxml`.
+There are two publish profiles in `src/LightMarkdownWriter/Properties/PublishProfiles/`. Both are re-included by exceptions in `.gitignore`, which otherwise ignores `*.pubxml`.
 
-| Setting | Value |
-|---|---|
-| Output | Framework-dependent single file, win-x64 |
-| ReadyToRun | On |
-| Native libraries | `IncludeNativeLibrariesForSelfExtract` (the WebView2 loader is extracted to `%TEMP%\.net\LightMarkdownWriter\…` on first run) |
-| Satellite assemblies | English only |
-| Output folder | `artifacts/publish/` (git-ignored) |
-| Size | About 15 MB |
+| Setting | `win-x64.pubxml` (portable exe) | `win-x64-installer.pubxml` (for the installer) |
+|---|---|---|
+| Output | Framework-dependent single file, win-x64 | **Self-contained** single file, win-x64 (.NET bundled) |
+| Compression | None | `EnableCompressionInSingleFile`: 180 MB down to 77 MB, about 0.9 s to show a document (against 0.66 s portable) |
+| ReadyToRun | On | On |
+| Native libraries | `IncludeNativeLibrariesForSelfExtract` (the WebView2 loader is extracted to `%TEMP%\.net\LightMarkdownWriter\…` on first run) | Same |
+| Satellite assemblies | English only (set in the csproj) | Same |
+| Output folder | `artifacts/publish/` (git-ignored) | `artifacts/installer-publish/` (git-ignored) |
+| Size | About 15 MB | 77 MB installed; 71.6 MB setup exe |
+
+## Installer
+
+The Inno Setup 6 script is `installer/LightMarkdownWriter.iss`, built by `installer/build-installer.ps1`. The script reads `<Version>` from the csproj, publishes with `win-x64-installer`, runs ISCC and writes `.sha256`.
+
+- **Per-user**, no admin (`PrivilegesRequired=lowest`), installing to `%LOCALAPPDATA%\Programs\LightMarkdownWriter`. The `AppId` GUID must never change, since upgrades and the uninstaller depend on it.
+- **Task `mdfiles`** (ticked by default) writes the same registry keys as `FileAssociationService.Register`.
+  - It sets the `.md`/`.markdown` default only when none exists (`HasNoDefault` in `[Code]`).
+  - If another app is the default, the last page offers `ms-settings:defaultapps?registeredAppUser=LightMarkdownWriter`.
+- **Uninstall** (`CurUninstallStepChanged`) deletes every association key, including ones the app's Settings created. It removes the `.md` default only if it's still ours, and keeps `%LOCALAPPDATA%\LightMarkdownWriter`.
+- **Upgrades** use the Restart Manager (`CloseApplications=yes`) to close a running copy. The app saves on `Application.SessionEnding`.
+- **Inno gotcha:** `ValueType: none` creates only the key, not a `REG_NONE` value. `OpenWithProgids` entries are written as empty strings instead.

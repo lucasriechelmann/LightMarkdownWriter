@@ -26,6 +26,7 @@ Each feature, in user terms, with the code that owns it. Folder-level ownership 
 | **File association** | Register or remove "Open with" for `.md` and `.markdown`; open Default apps | `Services/FileAssociationService.cs`, the Files section of `SettingsWindow` |
 | **Keyboard while the preview has focus** | Every app shortcut still works | `MainWindow.OnPreviewKeyDown` |
 | **Packaging and icon** | One portable exe; the "MD" app icon | `Properties/PublishProfiles/win-x64.pubxml`, `Services/PreviewAssets.cs`, `Assets/app.ico` (from `tools/make-icon.ps1`) |
+| **Installer** | Per-user setup with .NET bundled: Start-menu entry, uninstaller, optional `.md` association (default when none is set), and a shortcut to Default apps | `installer/` (`LightMarkdownWriter.iss`, `build-installer.ps1`), `Properties/PublishProfiles/win-x64-installer.pubxml` |
 | **Website** | Landing page with the interactive split-view demo, features, shortcuts and install steps | `docs/index.html` (GitHub Pages from `main` `/docs`) |
 
 ## Planned features
